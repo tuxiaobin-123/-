@@ -1,0 +1,331 @@
+/* ==================== 全局重置 ==================== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ==================== 根元素样式 ==================== */
+:root {
+  color-scheme: dark;
+  --color-bg-primary: #0a1628;
+  --color-bg-secondary: #1a2a3a;
+  --color-primary: #00d4ff;
+  --color-success: #00ff88;
+  --color-warning: #ffa500;
+  --color-danger: #ff4d4d;
+  --color-text-primary: #e0e0e0;
+  --color-text-secondary: #aaa;
+  --color-border: rgba(0, 212, 255, 0.15);
+}
+
+/* ==================== Body样式 ==================== */
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: linear-gradient(135deg, var(--color-bg-primary) 0%, var(--color-bg-secondary) 100%);
+  color: var(--color-text-primary);
+  font-family: 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+}
+
+/* ==================== 根挂载点 ==================== */
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+/* ==================== Ant Design深色主题覆盖 ==================== */
+:global(.ant-btn-primary) {
+  background: linear-gradient(90deg, #00d4ff, #00ffff) !important;
+  border: none !important;
+  color: #0a1628 !important;
+  font-weight: 600 !important;
+}
+
+:global(.ant-btn-primary:hover) {
+  box-shadow: 0 4px 12px rgba(0, 212, 255, 0.4) !important;
+  background: linear-gradient(90deg, #00ffff, #00d4ff) !important;
+}
+
+:global(.ant-btn) {
+  border-color: rgba(0, 212, 255, 0.3) !important;
+  color: var(--color-text-primary) !important;
+  transition: all 0.3s ease !important;
+}
+
+:global(.ant-btn:hover) {
+  border-color: rgba(0, 212, 255, 0.6) !important;
+  color: #00d4ff !important;
+}
+
+:global(.ant-tabs-nav) {
+  margin-bottom: 0 !important;
+}
+
+:global(.ant-tabs-tab) {
+  color: var(--color-text-secondary) !important;
+  border: none !important;
+}
+
+:global(.ant-tabs-tab-active) {
+  color: #00d4ff !important;
+}
+
+:global(.ant-tabs-ink-bar) {
+  background: linear-gradient(90deg, #00d4ff, #00ffff) !important;
+}
+
+:global(.ant-slider-handle) {
+  background: #00d4ff !important;
+  border-color: #00ffff !important;
+}
+
+:global(.ant-slider-track) {
+  background: linear-gradient(90deg, #00d4ff, #00ffff) !important;
+}
+
+:global(.ant-message-notice-content) {
+  background: rgba(10, 22, 40, 0.95) !important;
+  color: var(--color-text-primary) !important;
+  border: 1px solid rgba(0, 212, 255, 0.3) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6) !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+:global(.ant-message-success) {
+  color: #00ff88 !important;
+}
+
+:global(.ant-message-error) {
+  color: #ff4d4d !important;
+}
+
+:global(.ant-message-warning) {
+  color: #ffa500 !important;
+}
+
+:global(.ant-message-info) {
+  color: #00d4ff !important;
+}
+
+/* ==================== 滚动条样式 ==================== */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 212, 255, 0.3);
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 212, 255, 0.5);
+  box-shadow: 0 0 6px rgba(0, 212, 255, 0.3);
+}
+
+/* ==================== 选中文本样式 ==================== */
+::selection {
+  background: rgba(0, 212, 255, 0.3);
+  color: #00ffff;
+}
+
+/* ==================== 输入框样式 ==================== */
+input,
+textarea,
+select {
+  background: rgba(0, 212, 255, 0.05);
+  border: 1px solid rgba(0, 212, 255, 0.15) !important;
+  color: var(--color-text-primary) !important;
+  border-radius: 4px !important;
+  transition: all 0.3s ease !important;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  background: rgba(0, 212, 255, 0.08);
+  border-color: rgba(0, 212, 255, 0.5) !important;
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.2) !important;
+}
+
+/* ==================== 链接样式 ==================== */
+a {
+  color: #00d4ff;
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+a:hover {
+  color: #00ffff;
+  text-shadow: 0 0 8px rgba(0, 212, 255, 0.5);
+}
+
+/* ==================== 按钮重置 ==================== */
+button {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ==================== 表单元素 ==================== */
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: #00d4ff;
+}
+
+/* ==================== 动画定义 ==================== */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInTop {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInBottom {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes glow {
+  0%,
+  100% {
+    box-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(0, 212, 255, 0.6);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* ==================== 工具类 ==================== */
+.no-select {
+  user-select: none;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.text-left {
+  text-align: left;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ==================== 响应式媒体查询 ==================== */
+@media (max-width: 1440px) {
+  body {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 768px) {
+  body {
+    font-size: 12px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  input,
+  textarea,
+  select {
+    font-size: 16px; /* 移动端防止自动缩放 */
+  }
+}
+
+/* ==================== 打印样式 ==================== */
+@media print {
+  body {
+    background: white;
+    color: black;
+  }
+}

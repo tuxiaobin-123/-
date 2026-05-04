@@ -1,0 +1,38 @@
+# Dependencies and virtual environments
+.venv*/
+venv/
+backend/venv/
+node_modules/
+
+# Build outputs
+frontend/dist/
+dist/
+build/
+
+# Runtime/cache files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+runtime-logs/
+tmp/
+outputs/
+
+# Local editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

@@ -1,0 +1,354 @@
+.case-page,
+.case-page-loading {
+  min-height: 100vh;
+  color: #e9faff;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(21, 190, 255, 0.16), transparent 28%),
+    radial-gradient(circle at 88% 10%, rgba(69, 245, 176, 0.1), transparent 25%),
+    linear-gradient(180deg, #061521 0%, #020912 100%);
+}
+
+.case-page {
+  padding: 24px;
+}
+
+.case-page-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  font-size: 15px;
+}
+
+.case-page-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  padding: 18px;
+  border: 1px solid rgba(91, 212, 255, 0.16);
+  border-radius: 26px;
+  background: rgba(5, 19, 32, 0.72);
+}
+
+.case-page-header span,
+.case-kpi-card span,
+.case-hero-card span,
+.case-panel-head span,
+.case-seed-card span {
+  display: block;
+  color: rgba(142, 196, 224, 0.74);
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+
+.case-page-header h1 {
+  margin: 5px 0 0;
+  color: #f4fcff;
+  font-size: clamp(28px, 3vw, 44px);
+  line-height: 1.08;
+}
+
+.case-page-header p,
+.case-kpi-card p,
+.case-hero-card p,
+.case-seed-card p {
+  margin: 6px 0 0;
+  color: rgba(151, 211, 238, 0.78);
+}
+
+.case-back-button,
+.case-primary-action,
+.case-panel-head button {
+  height: 42px;
+  border: 1px solid rgba(91, 212, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(12, 42, 68, 0.72);
+  color: #cff6ff;
+  cursor: pointer;
+}
+
+.case-back-button {
+  padding: 0 18px;
+}
+
+.case-primary-action {
+  min-width: 190px;
+  border-color: rgba(69, 245, 176, 0.36);
+  background: linear-gradient(135deg, rgba(18, 204, 157, 0.95), rgba(25, 177, 242, 0.9));
+  color: #02131c;
+  font-weight: 800;
+}
+
+.case-page-error,
+.case-page-message {
+  margin-top: 14px;
+  padding: 12px 16px;
+  border-radius: 16px;
+}
+
+.case-page-error {
+  border: 1px solid rgba(255, 102, 115, 0.28);
+  background: rgba(57, 16, 24, 0.62);
+  color: #ffc3ca;
+}
+
+.case-page-message {
+  border: 1px solid rgba(69, 245, 176, 0.28);
+  background: rgba(16, 57, 46, 0.52);
+  color: #baffdf;
+}
+
+.case-page-grid {
+  display: grid;
+  grid-template-columns: 1.4fr repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.case-hero-card,
+.case-kpi-card,
+.case-page-panel {
+  border: 1px solid rgba(91, 212, 255, 0.14);
+  border-radius: 22px;
+  background: rgba(5, 19, 32, 0.68);
+  box-shadow: inset 0 1px 0 rgba(198, 244, 255, 0.04);
+}
+
+.case-hero-card,
+.case-kpi-card {
+  min-width: 0;
+  padding: 16px;
+}
+
+.case-hero-card strong,
+.case-kpi-card strong {
+  display: block;
+  margin-top: 8px;
+  color: #f4fcff;
+  font-size: 26px;
+}
+
+.case-hero-card em {
+  display: block;
+  margin-top: 14px;
+  color: rgba(142, 196, 224, 0.68);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.case-trust-good {
+  border-color: rgba(69, 245, 176, 0.32);
+}
+
+.case-trust-good strong {
+  color: #42f5bc;
+}
+
+.case-trust-warn strong {
+  color: #ffd56f;
+}
+
+.case-trust-muted strong {
+  color: #a9c6d6;
+}
+
+.case-trust-danger strong {
+  color: #ff6673;
+}
+
+.case-page-sections {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.case-page-panel {
+  min-width: 0;
+  padding: 16px;
+}
+
+.case-page-panel.wide {
+  grid-column: span 2;
+}
+
+.case-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.case-panel-head h2 {
+  margin: 5px 0 0;
+  color: #eefbff;
+  font-size: 20px;
+}
+
+.case-panel-head button {
+  padding: 0 16px;
+}
+
+.case-series-table,
+.case-station-grid,
+.case-object-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.case-series-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr) 90px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 11px 12px;
+  border: 1px solid rgba(91, 212, 255, 0.1);
+  border-radius: 14px;
+  background: rgba(4, 14, 25, 0.58);
+}
+
+.case-series-row strong,
+.case-series-row span,
+.case-series-row em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.case-series-row strong,
+.case-station-card strong,
+.case-object-grid strong,
+.case-timeline strong,
+.case-seed-card strong {
+  color: #f3fbff;
+}
+
+.case-series-row span,
+.case-series-row em,
+.case-station-card span,
+.case-station-card em,
+.case-object-grid span,
+.case-object-grid em {
+  color: rgba(151, 211, 238, 0.76);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.case-source-warning {
+  margin: 12px 0 0;
+  color: #ffd56f;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.case-station-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.case-station-card,
+.case-object-grid > div {
+  padding: 12px;
+  border: 1px solid rgba(91, 212, 255, 0.1);
+  border-radius: 15px;
+  background: rgba(4, 14, 25, 0.58);
+}
+
+.case-station-card span,
+.case-station-card em,
+.case-object-grid span,
+.case-object-grid em {
+  display: block;
+  margin-top: 5px;
+}
+
+.case-replay-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr 0.9fr;
+  gap: 14px;
+}
+
+.case-timeline,
+.case-targets {
+  display: grid;
+  gap: 10px;
+}
+
+.case-timeline > div,
+.case-seed-card {
+  padding: 12px;
+  border: 1px solid rgba(255, 213, 111, 0.14);
+  border-radius: 15px;
+  background: rgba(255, 213, 111, 0.055);
+}
+
+.case-timeline span {
+  display: block;
+  color: #ffd56f;
+  font-size: 12px;
+}
+
+.case-timeline strong {
+  display: block;
+  margin-top: 4px;
+  line-height: 1.45;
+}
+
+.case-targets span,
+.case-source-list-full span {
+  padding: 9px 11px;
+  border-radius: 999px;
+  background: rgba(91, 212, 255, 0.06);
+  color: #c9f4ff;
+  font-size: 12px;
+}
+
+.case-object-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.case-source-list-full {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+@media (max-width: 1280px) {
+  .case-page-grid,
+  .case-page-sections,
+  .case-replay-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .case-page-panel.wide {
+    grid-column: span 1;
+  }
+
+  .case-object-grid,
+  .case-station-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .case-page {
+    padding: 14px;
+  }
+
+  .case-page-header {
+    grid-template-columns: 1fr;
+  }
+
+  .case-primary-action,
+  .case-back-button {
+    width: 100%;
+  }
+
+  .case-series-row,
+  .case-object-grid,
+  .case-station-grid {
+    grid-template-columns: 1fr;
+  }
+}

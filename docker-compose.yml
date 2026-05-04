@@ -1,0 +1,42 @@
+version: '3.9'
+
+services:
+  # ==================== 后端服务 ====================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: flood-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=production
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./backend:/app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - flood-net
+
+  # ==================== 前端服务 ====================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: flood-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - flood-net
+
+networks:
+  flood-net:
+    driver: bridge

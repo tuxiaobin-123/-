@@ -1,0 +1,35 @@
+/* ==================== 全局入口样式 ==================== */
+
+/* 重置默认样式 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body {
+  background: linear-gradient(135deg, #0a1628 0%, #1a2a3a 100%);
+  color: #e0e0e0;
+  font-family: 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Ant Design全局配置（普通CSS选择器，不使用CSS Modules语法） */
+.ant-spin {
+  --ant-color-text: #e0e0e0;
+}
+
+.ant-message {
+  font-family: 'Microsoft YaHei', sans-serif;
+}

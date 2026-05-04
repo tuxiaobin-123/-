@@ -1,0 +1,110 @@
+/* ==================== 预测图表容器 ==================== */
+.prediction-chart-container {
+  width: 100%;
+  height: 100%;
+  background: rgba(10, 22, 40, 0.5);
+  border: 1px solid rgba(0, 212, 255, 0.15);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ==================== 标签页样式 ==================== */
+.prediction-tabs :global(.ant-tabs) {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.prediction-tabs :global(.ant-tabs-nav) {
+  background: rgba(0, 212, 255, 0.03);
+  border-bottom: 1px solid rgba(0, 212, 255, 0.1) !important;
+  margin-bottom: 0 !important;
+}
+
+.prediction-tabs :global(.ant-tabs-nav-wrap) {
+  padding-left: 12px;
+}
+
+.prediction-tabs :global(.ant-tabs-tab) {
+  border: none !important;
+  color: #888 !important;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 10px 16px !important;
+  transition: all 0.3s ease;
+}
+
+.prediction-tabs :global(.ant-tabs-tab:hover) {
+  color: #00d4ff !important;
+}
+
+.prediction-tabs :global(.ant-tabs-tab-active) {
+  color: #00d4ff !important;
+  background: rgba(0, 212, 255, 0.08);
+  border-radius: 4px 4px 0 0;
+}
+
+.prediction-tabs :global(.ant-tabs-ink-bar) {
+  background: linear-gradient(90deg, #00d4ff, #00ffff) !important;
+  height: 2px !important;
+  bottom: -1px;
+}
+
+/* ==================== 图表容器 ==================== */
+.chart-wrapper {
+  flex: 1;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.chart-wrapper :global(.echarts-for-react) {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ==================== ECharts自定义样式 ==================== */
+
+/* 线条样式 */
+.prediction-chart-container :global(.echarts-for-react) line {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 标签样式 */
+.prediction-chart-container :global(.echarts-for-react) text {
+  font-family: 'Microsoft YaHei', sans-serif;
+}
+
+/* 网格线 */
+.prediction-chart-container :global(.echarts-container .echarts-grid-line) {
+  opacity: 0.5;
+}
+
+/* ==================== 响应式设计 ==================== */
+@media (max-width: 1440px) {
+  .prediction-tabs :global(.ant-tabs-tab) {
+    padding: 8px 12px !important;
+    font-size: 11px;
+  }
+
+  .chart-wrapper {
+    padding: 8px;
+  }
+}
+
+@media (max-width: 768px) {
+  .prediction-chart-container {
+    border-radius: 4px;
+  }
+
+  .prediction-tabs :global(.ant-tabs-tab) {
+    padding: 6px 10px !important;
+    font-size: 10px;
+  }
+
+  .chart-wrapper {
+    padding: 6px;
+  }
+}
