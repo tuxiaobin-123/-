@@ -38,11 +38,37 @@ def load_dem_grid_cache(cache_path: str | Path, rows: int, cols: int) -> np.ndar
     with path.open("r", encoding="utf-8") as file:
         payload = json.load(file)
 
+    if isinstance(payload, list):
+        return _load_legacy_point_records(payload, rows, cols)
+
+    if not isinstance(payload, dict):
+        return None
+
     if int(payload.get("rows", -1)) != rows or int(payload.get("cols", -1)) != cols:
         return None
 
     elevation = np.asarray(payload.get("elevation_m", []), dtype=np.float32)
     if elevation.shape != (rows, cols):
+        return None
+
+    if not np.isfinite(elevation).all():
+        return None
+
+    return elevation
+
+
+def _load_legacy_point_records(payload: list, rows: int, cols: int) -> np.ndarray | None:
+    """Load the earlier DEM cache shape: a flat list of row/col/elevation records."""
+
+    elevation = np.full((rows, cols), np.nan, dtype=np.float32)
+
+    try:
+        for point in payload:
+            row = int(point["row"])
+            col = int(point["col"])
+            if 0 <= row < rows and 0 <= col < cols:
+                elevation[row, col] = float(point["elevation_m"])
+    except (KeyError, TypeError, ValueError):
         return None
 
     if not np.isfinite(elevation).all():

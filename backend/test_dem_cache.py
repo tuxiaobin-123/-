@@ -38,6 +38,28 @@ def test_load_dem_grid_cache_returns_expected_matrix() -> None:
     assert float(dem[0, 1]) == 102.5
 
 
+def test_load_dem_grid_cache_supports_legacy_point_records() -> None:
+    tmp_dir = tempfile.TemporaryDirectory()
+    cache_path = Path(tmp_dir.name) / "legacy_dem_cache.json"
+    cache_path.write_text(
+        """
+        [
+          {"row": 0, "col": 0, "elevation_m": 101.0},
+          {"row": 0, "col": 1, "elevation_m": 102.5},
+          {"row": 1, "col": 0, "elevation_m": 98.0},
+          {"row": 1, "col": 1, "elevation_m": 99.5}
+        ]
+        """,
+        encoding="utf-8",
+    )
+
+    dem = load_dem_grid_cache(cache_path, rows=2, cols=2)
+
+    assert dem.shape == (2, 2)
+    assert dem.dtype == np.float32
+    assert float(dem[1, 0]) == 98.0
+
+
 def test_swe_model_prefers_valid_dem_cache() -> None:
     tmp_dir = tempfile.TemporaryDirectory()
     cache_path = Path(tmp_dir.name) / "oroville_dem_cache.json"
