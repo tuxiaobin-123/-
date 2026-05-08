@@ -159,7 +159,6 @@
   border: 1px solid rgba(250, 246, 220, 0.22);
   background: rgba(4, 12, 18, 0.72);
   box-shadow: 0 12px 26px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(8px);
 }
 
 .topic-map-stats div {
@@ -285,30 +284,28 @@
 }
 
 .flood-map-container .study-boundary {
-  filter: drop-shadow(0 0 3px rgba(255, 246, 191, 0.72));
+  filter: none;
 }
 
 .flood-map-container .water-body-layer {
-  filter: drop-shadow(0 0 8px rgba(0, 114, 220, 0.34));
+  filter: none;
 }
 
 .flood-map-container .context-river {
-  filter: drop-shadow(0 0 7px rgba(25, 201, 255, 0.7));
+  filter: none;
 }
 
 .flood-map-container .context-road {
-  filter: drop-shadow(0 0 3px rgba(255, 244, 199, 0.42));
+  filter: none;
 }
 
 .flood-map-container .dam-axis-line {
-  filter: drop-shadow(0 0 10px rgba(255, 223, 125, 0.72));
+  filter: none;
 }
 
 .flood-map-container .inundation-surface {
   transition: fill-opacity 180ms ease, opacity 180ms ease;
-  filter:
-    drop-shadow(0 0 10px rgba(5, 53, 230, 0.42))
-    drop-shadow(0 0 20px rgba(5, 42, 180, 0.24));
+  filter: none;
 }
 
 .flood-map-container .inundation-main {
@@ -321,16 +318,16 @@
 
 .flood-map-container .inundation-extreme,
 .flood-map-container .risk-dot {
-  filter: drop-shadow(0 0 10px rgba(255, 77, 98, 0.68));
+  filter: none;
 }
 
 .flood-map-container .risk-contour-layer {
-  filter: drop-shadow(0 0 6px rgba(118, 229, 255, 0.24));
+  filter: none;
 }
 
 .flood-map-container .velocity-thread {
   pointer-events: none;
-  animation: flow-thread 2.8s ease-in-out infinite;
+  animation: none;
 }
 
 @keyframes flow-thread {
@@ -439,7 +436,7 @@
 }
 
 .evacuation-route-line {
-  filter: drop-shadow(0 0 7px currentColor);
+  filter: none;
 }
 
 .topic-tooltip {

@@ -343,6 +343,16 @@ const buildFloodEnvelope = (points: FloodGridPoint[], minDepth: number, latStep:
   return [...upperEdge, ...lowerEdge]
 }
 
+const buildVelocitySegment = (point: FloodGridPoint): [LatLng, LatLng] => {
+  const speed = Math.sqrt(point.vel_u ** 2 + point.vel_v ** 2)
+  const angle = Math.atan2(point.vel_v, point.vel_u)
+  const length = Math.min(speed * 0.004, 0.014)
+  return [
+    [point.lat, point.lng],
+    [point.lat + Math.cos(angle) * length, point.lng + Math.sin(angle) * length]
+  ]
+}
+
 const buildFloodPopup = (depth: number, areaLabel: string) => `
   <div class="map-popup">
     <strong>${areaLabel}</strong>
@@ -401,16 +411,44 @@ export const FloodMap: React.FC<FloodMapProps> = ({
   const context = useMemo(() => resolveContext(floodGrid, sensors, keyPoints), [floodGrid, sensors, keyPoints])
   const floodedPoints = useMemo(() => floodGrid.filter((point) => point.flooded), [floodGrid])
   const maxDepth = useMemo(() => floodedPoints.reduce((max, point) => Math.max(max, point.depth), 0), [floodedPoints])
+  const gridMetrics = useMemo(
+    () => ({
+      latStep: inferGridStep(floodGrid.map((point) => point.lat), 0.0055),
+      lngStep: inferGridStep(floodGrid.map((point) => point.lng), 0.0055)
+    }),
+    [floodGrid]
+  )
   const floodedAreaLabel = useMemo(() => {
     if (floodedPoints.length === 0) {
       return '0.0 km²'
     }
-    const latStep = inferGridStep(floodGrid.map((point) => point.lat), 0.0055)
-    const lngStep = inferGridStep(floodGrid.map((point) => point.lng), 0.0055)
     const meanLat = floodedPoints.reduce((sum, point) => sum + point.lat, 0) / floodedPoints.length
-    const cellAreaKm2 = Math.abs(latStep * 111 * lngStep * 111 * Math.cos((meanLat * Math.PI) / 180))
+    const cellAreaKm2 = Math.abs(gridMetrics.latStep * 111 * gridMetrics.lngStep * 111 * Math.cos((meanLat * Math.PI) / 180))
     return `${(cellAreaKm2 * floodedPoints.length).toFixed(1)} km²`
-  }, [floodGrid, floodedPoints])
+  }, [floodedPoints, gridMetrics])
+  const floodRenderState = useMemo(
+    () => ({
+      floodEnvelope: buildFloodEnvelope(floodGrid, 0.02, gridMetrics.latStep, gridMetrics.lngStep),
+      deepEnvelope: buildFloodEnvelope(floodGrid, 1.0, gridMetrics.latStep, gridMetrics.lngStep),
+      extremeEnvelope: buildFloodEnvelope(floodGrid, 2.0, gridMetrics.latStep, gridMetrics.lngStep),
+      hotSpots: floodedPoints
+        .filter((point) => point.risk_level === 'high' || point.risk_level === 'extreme')
+        .sort((left, right) => right.depth - left.depth)
+        .slice(0, 18)
+    }),
+    [floodGrid, floodedPoints, gridMetrics]
+  )
+  const velocitySegments = useMemo(() => {
+    if (!showVelocity) {
+      return []
+    }
+    return floodedPoints
+      .map((point) => ({ point, speed: Math.sqrt(point.vel_u ** 2 + point.vel_v ** 2) }))
+      .filter((item) => item.speed >= 0.35)
+      .sort((left, right) => right.speed - left.speed)
+      .slice(0, 22)
+      .map((item) => buildVelocitySegment(item.point))
+  }, [floodedPoints, showVelocity])
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) {
@@ -426,12 +464,19 @@ export const FloodMap: React.FC<FloodMapProps> = ({
       zoomControl: false,
       attributionControl: true,
       preferCanvas: true,
+      renderer: L.canvas({ padding: 0.35 }),
+      markerZoomAnimation: false,
+      wheelDebounceTime: 50,
+      zoomSnap: 0.25,
       minZoom: 8,
       maxZoom: 17
     }).setView(context.center, context.zoom)
 
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
       maxZoom: 17,
+      keepBuffer: 1,
+      updateWhenIdle: true,
+      updateWhenZooming: false,
       attribution: 'Tiles © Esri · Source: Esri, Maxar, Earthstar Geographics and GIS User Community'
     }).addTo(map)
 
@@ -595,11 +640,7 @@ export const FloodMap: React.FC<FloodMapProps> = ({
 
     layers.flood.clearLayers()
 
-    const latStep = inferGridStep(floodGrid.map((point) => point.lat), 0.0055)
-    const lngStep = inferGridStep(floodGrid.map((point) => point.lng), 0.0055)
-    const floodEnvelope = buildFloodEnvelope(floodGrid, 0.02, latStep, lngStep)
-    const deepEnvelope = buildFloodEnvelope(floodGrid, 1.0, latStep, lngStep)
-    const extremeEnvelope = buildFloodEnvelope(floodGrid, 2.0, latStep, lngStep)
+    const { floodEnvelope, deepEnvelope, extremeEnvelope, hotSpots } = floodRenderState
 
     if (floodEnvelope) {
       layers.flood.addLayer(
@@ -640,10 +681,7 @@ export const FloodMap: React.FC<FloodMapProps> = ({
       )
     }
 
-    floodedPoints
-      .filter((point) => point.risk_level === 'high' || point.risk_level === 'extreme')
-      .slice(0, 26)
-      .forEach((point) => {
+    hotSpots.forEach((point) => {
         layers.flood.addLayer(
           L.circleMarker([point.lat, point.lng], {
             radius: point.risk_level === 'extreme' ? 4.8 : 3.6,
@@ -656,7 +694,7 @@ export const FloodMap: React.FC<FloodMapProps> = ({
           }).bindPopup(buildFloodPopup(point.depth, RISK_COPY[point.risk_level].label), { className: 'topic-popup-shell' })
         )
       })
-  }, [floodGrid, floodedPoints, maxDepth])
+  }, [floodRenderState, maxDepth])
 
   useEffect(() => {
     const layers = layersRef.current
@@ -665,25 +703,10 @@ export const FloodMap: React.FC<FloodMapProps> = ({
     }
 
     layers.velocity.clearLayers()
-    if (!showVelocity) {
-      return
-    }
-
-    floodedPoints
-      .filter((point) => Math.sqrt(point.vel_u ** 2 + point.vel_v ** 2) >= 0.35)
-      .slice(0, 38)
-      .forEach((point) => {
-        const speed = Math.sqrt(point.vel_u ** 2 + point.vel_v ** 2)
-        const angle = Math.atan2(point.vel_v, point.vel_u)
-        const length = Math.min(speed * 0.004, 0.014)
-        const endLat = point.lat + Math.cos(angle) * length
-        const endLng = point.lng + Math.sin(angle) * length
+    velocitySegments.forEach(([start, end]) => {
         layers.velocity.addLayer(
           L.polyline(
-            [
-              [point.lat, point.lng],
-              [endLat, endLng]
-            ],
+            [start, end],
             {
               color: '#d7f9ff',
               weight: 1.5,
@@ -694,7 +717,7 @@ export const FloodMap: React.FC<FloodMapProps> = ({
           )
         )
       })
-  }, [floodedPoints, showVelocity])
+  }, [velocitySegments])
 
   useEffect(() => {
     const layers = layersRef.current

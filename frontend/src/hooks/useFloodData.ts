@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { startTransition, useCallback, useEffect, useRef, useState } from 'react'
 import {
   CaseProfile,
   EvacuationRoute,
@@ -53,47 +53,69 @@ export const useFloodData = (selectedStationId?: string | null): UseFloodDataRet
 
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const initializedRef = useRef(false)
+  const realtimeRequestInFlightRef = useRef(false)
+  const staticLayerRefreshAtRef = useRef(0)
 
-  const fetchRealtimeData = useCallback(async () => {
+  const fetchRealtimeData = useCallback(async (options: { includeStaticLayers?: boolean } = {}) => {
+    if (realtimeRequestInFlightRef.current) {
+      return
+    }
+
+    realtimeRequestInFlightRef.current = true
     try {
-      const [gridData, sensorData, statusData, riskData, routesData, zonesData] = await Promise.all([
+      const now = Date.now()
+      const staticLayerInterval = simulationStatus?.is_running ? 6000 : 15000
+      const shouldRefreshStaticLayers =
+        options.includeStaticLayers || now - staticLayerRefreshAtRef.current > staticLayerInterval
+
+      const [gridData, sensorData, statusData, riskData] = await Promise.all([
         getFloodGrid(),
         getSensorData(),
         getSimulationStatus(),
-        getRiskAssessment(),
-        getEvacuationRoutes(),
-        getRiskZones()
+        getRiskAssessment()
       ])
-      setFloodGrid(gridData)
-      setSensors(sensorData)
-      setSimulationStatus(statusData)
-      setRiskStats(riskData)
-      setEvacuationRoutes(routesData)
-      setRiskZones(zonesData)
-      setError(null)
+      const [routesData, zonesData] = shouldRefreshStaticLayers
+        ? await Promise.all([getEvacuationRoutes(), getRiskZones()])
+        : [null, null]
+
+      if (shouldRefreshStaticLayers) {
+        staticLayerRefreshAtRef.current = now
+      }
+
+      startTransition(() => {
+        setFloodGrid(gridData)
+        setSensors(sensorData)
+        setSimulationStatus(statusData)
+        setRiskStats(riskData)
+        if (routesData) {
+          setEvacuationRoutes(routesData)
+        }
+        if (zonesData) {
+          setRiskZones(zonesData)
+        }
+        setError(null)
+      })
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : '获取实时数据失败'
       setError(errorMsg)
       console.error('Failed to fetch realtime data:', err)
+    } finally {
+      realtimeRequestInFlightRef.current = false
     }
-  }, [])
+  }, [simulationStatus?.is_running])
 
   const fetchInitialData = useCallback(async () => {
     try {
-      const [caseData, realStatus, predData, riskData, routesData, zonesData] = await Promise.all([
+      const [caseData, realStatus, predData] = await Promise.all([
         getActiveCase(),
         getRealDataStatus(),
-        getPrediction(selectedStationId || 'usgs_11407000'),
-        getRiskAssessment(),
-        getEvacuationRoutes(),
-        getRiskZones()
+        getPrediction(selectedStationId || 'usgs_11407000')
       ])
-      setCaseProfile(caseData)
-      setRealDataStatus(realStatus)
-      setPrediction(predData)
-      setRiskStats(riskData)
-      setEvacuationRoutes(routesData)
-      setRiskZones(zonesData)
+      startTransition(() => {
+        setCaseProfile(caseData)
+        setRealDataStatus(realStatus)
+        setPrediction(predData)
+      })
     } catch (err) {
       console.error('Failed to fetch initial data:', err)
     }
@@ -102,7 +124,7 @@ export const useFloodData = (selectedStationId?: string | null): UseFloodDataRet
   const refetch = useCallback(async () => {
     setLoading(true)
     try {
-      await fetchRealtimeData()
+      await fetchRealtimeData({ includeStaticLayers: true })
 
       if (!initializedRef.current) {
         await fetchInitialData()
@@ -157,6 +179,8 @@ export const useFloodData = (selectedStationId?: string | null): UseFloodDataRet
     }
   }, [fetchRealtimeData, simulationStatus?.is_running])
 
+  const refetchRealtime = useCallback(() => fetchRealtimeData({ includeStaticLayers: true }), [fetchRealtimeData])
+
   return {
     floodGrid,
     sensors,
@@ -170,6 +194,6 @@ export const useFloodData = (selectedStationId?: string | null): UseFloodDataRet
     loading,
     error,
     refetch,
-    refetchRealtime: fetchRealtimeData
+    refetchRealtime
   }
 }
