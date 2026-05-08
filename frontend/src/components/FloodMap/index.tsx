@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useMemo, useRef } from 'react'
 import L from 'leaflet'
 import { AffectedKeyPoint, EvacuationRoute, FloodGridPoint, RiskZoneCollection, SensorStation } from '../../types'
 import './FloodMap.css'
@@ -18,246 +18,358 @@ interface FloodMapProps {
   onKeyPointSelect?: (point: AffectedKeyPoint) => void
 }
 
-const GRID_SIZE = 0.0065
-const DEFAULT_VIEW: [number, number] = [39.515, -121.545]
-const DEFAULT_ZOOM = 11.9
+type LatLng = [number, number]
 
-const REGION_BOUNDARY: [number, number][] = [
-  [39.595, -121.675],
-  [39.592, -121.425],
-  [39.555, -121.395],
-  [39.520, -121.455],
-  [39.490, -121.500],
-  [39.430, -121.610],
-  [39.445, -121.665],
-  [39.520, -121.675]
-]
+type ContextLine = {
+  name: string
+  points: LatLng[]
+}
 
-const RESERVOIR_POLYGON: [number, number][] = [
-  [39.592, -121.448],
-  [39.575, -121.405],
-  [39.535, -121.392],
-  [39.505, -121.428],
-  [39.514, -121.478],
-  [39.537, -121.494],
-  [39.565, -121.485]
-]
+type Settlement = {
+  name: string
+  type: string
+  lat: number
+  lng: number
+}
 
-const DAM_AXIS: [number, number][] = [
-  [39.5374, -121.4975],
-  [39.5367, -121.4745]
-]
-
-const DOWNSTREAM_SECTION: [number, number][] = [
-  [39.522, -121.560],
-  [39.500, -121.548]
-]
-
-const CONTOUR_BANDS: Array<{ points: [number, number][]; fill: string; opacity: number; className: string }> = [
-  {
-    points: [
-      [39.445, -121.665],
-      [39.455, -121.650],
-      [39.470, -121.600],
-      [39.500, -121.555],
-      [39.530, -121.510],
-      [39.565, -121.505],
-      [39.575, -121.555],
-      [39.540, -121.625],
-      [39.490, -121.665]
-    ],
-    fill: 'rgba(126, 245, 194, 0.12)',
-    opacity: 0.72,
-    className: 'terrain-band terrain-band-1'
-  },
-  {
-    points: [
-      [39.505, -121.635],
-      [39.518, -121.585],
-      [39.535, -121.535],
-      [39.548, -121.490],
-      [39.570, -121.470],
-      [39.570, -121.535],
-      [39.545, -121.602],
-      [39.520, -121.648]
-    ],
-    fill: 'rgba(98, 222, 255, 0.1)',
-    opacity: 0.8,
-    className: 'terrain-band terrain-band-2'
-  },
-  {
-    points: [
-      [39.525, -121.500],
-      [39.545, -121.455],
-      [39.575, -121.430],
-      [39.575, -121.395],
-      [39.535, -121.410],
-      [39.505, -121.455]
-    ],
-    fill: 'rgba(255, 208, 97, 0.08)',
-    opacity: 0.84,
-    className: 'terrain-band terrain-band-3'
+type MapContext = {
+  id: 'sanggan' | 'oroville'
+  title: string
+  subtitle: string
+  source: string
+  center: LatLng
+  zoom: number
+  bounds: LatLng[]
+  waterBodies: LatLng[][]
+  rivers: ContextLine[]
+  roads: ContextLine[]
+  settlements: Settlement[]
+  dam: {
+    name: string
+    lat: number
+    lng: number
+    axis: LatLng[]
   }
-]
+}
 
-const MAIN_RIVER: [number, number][] = [
-  [39.590, -121.430],
-  [39.565, -121.465],
-  [39.537, -121.486],
-  [39.522, -121.548],
-  [39.500, -121.575],
-  [39.470, -121.615],
-  [39.445, -121.638]
-]
-
-const BRANCH_RIVERS: [number, number][][] = [
-  [
-    [39.565, -121.430],
-    [39.540, -121.455],
-    [39.515, -121.478],
-    [39.498, -121.505]
+const SANGGAN_CONTEXT: MapContext = {
+  id: 'sanggan',
+  title: '桑干河怀仁段 10年一遇洪水淹没范围图',
+  subtitle: '遥感底图 / DEM 模型网格 / 河道与村镇专题要素',
+  source: 'Imagery: Esri World Imagery · Context: OSM + local case dataset',
+  center: [39.805, 113.39],
+  zoom: 11,
+  bounds: [
+    [39.878, 113.278],
+    [39.878, 113.505],
+    [39.704, 113.505],
+    [39.704, 113.278]
   ],
-  [
-    [39.522, -121.548],
-    [39.505, -121.560],
-    [39.485, -121.590],
-    [39.458, -121.638]
+  waterBodies: [
+    [
+      [39.858, 113.288],
+      [39.848, 113.315],
+      [39.831, 113.345],
+      [39.807, 113.388],
+      [39.775, 113.452],
+      [39.766, 113.461],
+      [39.779, 113.407],
+      [39.802, 113.356],
+      [39.828, 113.318],
+      [39.850, 113.286]
+    ]
   ],
-  [
-    [39.595, -121.520],
-    [39.570, -121.500],
-    [39.548, -121.486]
-  ]
-]
+  rivers: [
+    {
+      name: '桑干河主槽',
+      points: [
+        [39.860, 113.290],
+        [39.848, 113.312],
+        [39.842, 113.322],
+        [39.820, 113.355],
+        [39.800, 113.400],
+        [39.768, 113.455]
+      ]
+    },
+    {
+      name: '南侧支沟',
+      points: [
+        [39.825, 113.305],
+        [39.807, 113.342],
+        [39.790, 113.386],
+        [39.772, 113.430]
+      ]
+    }
+  ],
+  roads: [
+    {
+      name: 'S212 大繁线',
+      points: [
+        [39.803, 113.249],
+        [39.806, 113.285],
+        [39.818, 113.302],
+        [39.837, 113.291],
+        [39.861, 113.290],
+        [39.913, 113.289]
+      ]
+    },
+    {
+      name: 'S502 大浑线',
+      points: [
+        [39.873, 113.485],
+        [39.858, 113.526],
+        [39.844, 113.545],
+        [39.826, 113.551],
+        [39.813, 113.554]
+      ]
+    },
+    {
+      name: '河谷联络线',
+      points: [
+        [39.702, 113.291],
+        [39.717, 113.304],
+        [39.744, 113.295],
+        [39.785, 113.308],
+        [39.842, 113.322]
+      ]
+    }
+  ],
+  settlements: [
+    { name: '怀仁城区', type: 'city', lat: 39.829, lng: 113.381 },
+    { name: '吉家庄乡', type: 'town', lat: 39.851, lng: 113.456 },
+    { name: '马辛庄村', type: 'village', lat: 39.838, lng: 113.294 },
+    { name: '王皓疃村', type: 'village', lat: 39.764, lng: 113.332 },
+    { name: '上西河村', type: 'village', lat: 39.779, lng: 113.361 },
+    { name: '金沙滩镇', type: 'town', lat: 39.827, lng: 113.376 }
+  ],
+  dam: {
+    name: '怀仁段控制断面',
+    lat: 39.842,
+    lng: 113.322,
+    axis: [
+      [39.846, 113.316],
+      [39.838, 113.328]
+    ]
+  }
+}
 
-const STAGE_LABELS = [
-  { name: '怀仁水库 库区', lat: 39.895, lng: 113.265 },
-  { name: '桑干河怀仁段 坝轴', lat: 39.870, lng: 113.280 },
-  { name: '桑干河下游断面', lat: 39.845, lng: 113.310 },
-  { name: '马鞍山高地避险区', lat: 39.830, lng: 113.340 }
-]
+const OROVILLE_CONTEXT: MapContext = {
+  id: 'oroville',
+  title: 'Oroville Dam 10-year Flood Inundation Map',
+  subtitle: 'Remote imagery / Feather River corridor / model-derived inundation',
+  source: 'Imagery: Esri World Imagery · Context: OpenStreetMap via Overpass',
+  center: [39.515, -121.545],
+  zoom: 12,
+  bounds: [
+    [39.602, -121.682],
+    [39.602, -121.388],
+    [39.416, -121.388],
+    [39.416, -121.682]
+  ],
+  waterBodies: [
+    [
+      [39.592, -121.448],
+      [39.575, -121.405],
+      [39.535, -121.392],
+      [39.505, -121.428],
+      [39.514, -121.478],
+      [39.537, -121.494],
+      [39.565, -121.485]
+    ]
+  ],
+  rivers: [
+    {
+      name: 'Feather River',
+      points: [
+        [39.590, -121.430],
+        [39.565, -121.465],
+        [39.537, -121.486],
+        [39.522, -121.548],
+        [39.513, -121.556],
+        [39.496, -121.552],
+        [39.470, -121.615],
+        [39.445, -121.638]
+      ]
+    },
+    {
+      name: 'Campbell Creek',
+      points: [
+        [39.596, -121.520],
+        [39.570, -121.500],
+        [39.548, -121.486],
+        [39.522, -121.548]
+      ]
+    },
+    {
+      name: 'Little Cottonwood Creek',
+      points: [
+        [39.565, -121.430],
+        [39.540, -121.455],
+        [39.515, -121.478],
+        [39.498, -121.505]
+      ]
+    }
+  ],
+  roads: [
+    {
+      name: 'Oroville Dam Blvd E',
+      points: [
+        [39.537, -121.486],
+        [39.524, -121.505],
+        [39.515, -121.533],
+        [39.512, -121.557]
+      ]
+    },
+    {
+      name: 'Oroville-Quincy Hwy',
+      points: [
+        [39.570, -121.470],
+        [39.545, -121.505],
+        [39.525, -121.545],
+        [39.515, -121.570]
+      ]
+    },
+    {
+      name: 'Nelson Ave',
+      points: [
+        [39.495, -121.615],
+        [39.500, -121.575],
+        [39.503, -121.542]
+      ]
+    }
+  ],
+  settlements: [
+    { name: 'Oroville', type: 'town', lat: 39.5138, lng: -121.5564 },
+    { name: 'Thermalito', type: 'village', lat: 39.5113, lng: -121.5869 },
+    { name: 'South Oroville', type: 'hamlet', lat: 39.4966, lng: -121.5522 },
+    { name: 'Palermo', type: 'village', lat: 39.435, lng: -121.547 },
+    { name: 'Oroville Junction', type: 'hamlet', lat: 39.5096, lng: -121.6505 },
+    { name: 'Wyandotte', type: 'hamlet', lat: 39.4579, lng: -121.4677 }
+  ],
+  dam: {
+    name: 'Oroville Dam',
+    lat: 39.537193,
+    lng: -121.485565,
+    axis: [
+      [39.5374, -121.4975],
+      [39.5367, -121.4745]
+    ]
+  }
+}
 
-const RISK_COPY: Record<FloodGridPoint['risk_level'], { label: string; color: string; className: string }> = {
-  low: { label: '低风险', color: 'rgba(48, 181, 255, 0.3)', className: 'risk-low' },
-  medium: { label: '中风险', color: 'rgba(255, 200, 65, 0.42)', className: 'risk-medium' },
-  high: { label: '高风险', color: 'rgba(255, 110, 54, 0.54)', className: 'risk-high' },
-  extreme: { label: '极高风险', color: 'rgba(255, 66, 82, 0.62)', className: 'risk-extreme' }
+const RISK_COPY: Record<FloodGridPoint['risk_level'], { label: string; color: string }> = {
+  low: { label: '低风险', color: '#2cb7ff' },
+  medium: { label: '中风险', color: '#35d7ff' },
+  high: { label: '高风险', color: '#ffb14d' },
+  extreme: { label: '极高风险', color: '#ff4d62' }
 }
 
 const SENSOR_STATUS_COPY: Record<SensorStation['status'], { label: string; color: string }> = {
-  normal: { label: '正常', color: '#45f5b0' },
-  warning: { label: '预警', color: '#ffcb57' },
-  danger: { label: '危险', color: '#ff6673' }
+  normal: { label: '正常', color: '#52f6b9' },
+  warning: { label: '预警', color: '#ffd166' },
+  danger: { label: '危险', color: '#ff5d73' }
 }
 
-const ROUTE_STATUS_COPY: Record<EvacuationRoute['status'], { label: string; color: string; dashArray: string }> = {
-  safe: { label: '安全通行', color: '#45f5b0', dashArray: '10, 6' },
-  caution: { label: '谨慎通行', color: '#ffcb57', dashArray: '12, 6' },
-  dangerous: { label: '危险绕行', color: '#ff6673', dashArray: '4, 8' }
+const ROUTE_STATUS_COPY: Record<EvacuationRoute['status'], { color: string; dashArray: string }> = {
+  safe: { color: '#52f6b9', dashArray: '12, 7' },
+  caution: { color: '#ffd166', dashArray: '10, 7' },
+  dangerous: { color: '#ff5d73', dashArray: '4, 8' }
 }
 
-const shiftPolygon = (points: [number, number][], latOffset: number, lngOffset: number): [number, number][] =>
-  points.map(([lat, lng]) => [lat + latOffset, lng + lngOffset])
+const asLatLngBounds = (points: LatLng[]) => L.latLngBounds(points.map(([lat, lng]) => L.latLng(lat, lng)))
 
-const formatVelocity = (point: FloodGridPoint) => Math.sqrt(point.vel_u ** 2 + point.vel_v ** 2)
+const uniqueSorted = (values: number[]) => [...new Set(values.map((value) => Number(value.toFixed(6))))].sort((a, b) => a - b)
 
-const buildFloodPopup = (point: FloodGridPoint) => {
-  const risk = RISK_COPY[point.risk_level]
-
-  return `
-    <div class="screen-popup flood-popup">
-      <div class="popup-title-row">
-        <div class="popup-title">洪水网格详情</div>
-        <div class="popup-badge ${risk.className}">${risk.label}</div>
-      </div>
-      <div class="popup-metrics">
-        <div class="popup-metric"><span>中心坐标</span><strong>${point.lat.toFixed(4)}, ${point.lng.toFixed(4)}</strong></div>
-        <div class="popup-metric"><span>积水深度</span><strong>${point.depth.toFixed(2)} m</strong></div>
-        <div class="popup-metric"><span>流速强度</span><strong>${formatVelocity(point).toFixed(2)} m/s</strong></div>
-      </div>
-    </div>
-  `
+const inferGridStep = (values: number[], fallback: number) => {
+  const sorted = uniqueSorted(values)
+  const deltas = sorted
+    .slice(1)
+    .map((value, index) => Math.abs(value - sorted[index]))
+    .filter((delta) => delta > 0.00001)
+  return deltas.length > 0 ? Math.min(...deltas) : fallback
 }
+
+const resolveContext = (floodGrid: FloodGridPoint[], sensors: SensorStation[], keyPoints: AffectedKeyPoint[]) => {
+  const lngValues = [
+    ...floodGrid.map((point) => point.lng),
+    ...sensors.map((station) => station.lng),
+    ...keyPoints.map((point) => point.lng).filter((value): value is number => typeof value === 'number')
+  ]
+
+  return lngValues.some((lng) => lng < 0) ? OROVILLE_CONTEXT : SANGGAN_CONTEXT
+}
+
+const buildFloodEnvelope = (points: FloodGridPoint[], minDepth: number, latStep: number, lngStep: number): LatLng[] | null => {
+  const flooded = points.filter((point) => point.flooded && point.depth >= minDepth)
+  if (flooded.length === 0) {
+    return null
+  }
+
+  const groups = new Map<number, { lng: number; minLat: number; maxLat: number }>()
+  flooded.forEach((point) => {
+    const key = Math.round(point.lng / Math.max(lngStep, 0.00001))
+    const current = groups.get(key)
+    if (!current) {
+      groups.set(key, { lng: point.lng, minLat: point.lat, maxLat: point.lat })
+      return
+    }
+    current.minLat = Math.min(current.minLat, point.lat)
+    current.maxLat = Math.max(current.maxLat, point.lat)
+  })
+
+  const columns = [...groups.values()].sort((left, right) => left.lng - right.lng)
+  const latPad = latStep * 0.56
+  const lngPad = lngStep * 0.52
+
+  if (columns.length === 1) {
+    const column = columns[0]
+    return [
+      [column.maxLat + latPad, column.lng - lngPad],
+      [column.maxLat + latPad, column.lng + lngPad],
+      [column.minLat - latPad, column.lng + lngPad],
+      [column.minLat - latPad, column.lng - lngPad]
+    ]
+  }
+
+  const upperEdge = columns.map((column, index) => {
+    const endPad = index === 0 ? -lngPad : index === columns.length - 1 ? lngPad : 0
+    return [column.maxLat + latPad, column.lng + endPad] as LatLng
+  })
+  const lowerEdge = [...columns].reverse().map((column, index) => {
+    const endPad = index === 0 ? lngPad : index === columns.length - 1 ? -lngPad : 0
+    return [column.minLat - latPad, column.lng + endPad] as LatLng
+  })
+
+  return [...upperEdge, ...lowerEdge]
+}
+
+const buildFloodPopup = (depth: number, areaLabel: string) => `
+  <div class="map-popup">
+    <strong>${areaLabel}</strong>
+    <span>模型推演最大水深 ${depth.toFixed(2)} m</span>
+    <span>蓝色连续面由当前洪水网格实时聚合生成</span>
+  </div>
+`
 
 const buildSensorPopup = (sensor: SensorStation) => {
   const status = SENSOR_STATUS_COPY[sensor.status]
-
   return `
-    <div class="screen-popup sensor-popup">
-      <div class="popup-title-row">
-        <div>
-          <div class="popup-title">${sensor.name}</div>
-          <div class="popup-subtitle">站点编号 ${sensor.station_id}</div>
-        </div>
-        <div class="popup-badge" style="border-color:${status.color}; color:${status.color};">${status.label}</div>
-      </div>
-      <div class="popup-grid">
-        <div class="popup-grid-item"><span>水位</span><strong>${sensor.water_level.toFixed(2)} m</strong></div>
-        <div class="popup-grid-item"><span>雨量</span><strong>${sensor.rainfall.toFixed(1)} mm/h</strong></div>
-        <div class="popup-grid-item"><span>流速</span><strong>${sensor.flow_rate.toFixed(2)} m/s</strong></div>
-        <div class="popup-grid-item"><span>电量</span><strong>${sensor.battery}%</strong></div>
-        <div class="popup-grid-item"><span>信号</span><strong>${sensor.signal_quality}%</strong></div>
-        <div class="popup-grid-item"><span>更新时间</span><strong>${new Date(sensor.last_update).toLocaleTimeString('zh-CN', { hour12: false })}</strong></div>
-      </div>
+    <div class="map-popup">
+      <strong>${sensor.name}</strong>
+      <span style="color:${status.color}">${status.label}</span>
+      <span>水位 ${sensor.water_level.toFixed(2)} m · 降雨 ${sensor.rainfall.toFixed(1)} mm/h</span>
+      <span>流速 ${sensor.flow_rate.toFixed(2)} m/s · ${new Date(sensor.last_update).toLocaleTimeString('zh-CN', { hour12: false })}</span>
     </div>
   `
 }
 
-const buildRoutePopup = (route: EvacuationRoute) => {
-  const status = ROUTE_STATUS_COPY[route.status]
-
-  return `
-    <div class="screen-popup route-popup">
-      <div class="popup-title-row">
-        <div class="popup-title">避险疏散路线</div>
-        <div class="popup-badge" style="border-color:${status.color}; color:${status.color};">${status.label}</div>
-      </div>
-      <div class="popup-route-name">${route.origin.name} → ${route.destination.name}</div>
-      <div class="popup-metrics">
-        <div class="popup-metric"><span>路线距离</span><strong>${route.distance.toFixed(1)} km</strong></div>
-        <div class="popup-metric"><span>预计耗时</span><strong>${route.estimated_minutes} 分钟</strong></div>
-        <div class="popup-metric"><span>风险评分</span><strong>${route.risk_score.toFixed(1)} / 100</strong></div>
-      </div>
-    </div>
-  `
-}
-
-const buildRiskZonePopup = (riskLevel: FloodGridPoint['risk_level'], areaKm2: number) => {
-  const risk = RISK_COPY[riskLevel]
-
-  return `
-    <div class="screen-popup risk-zone-popup">
-      <div class="popup-title-row">
-        <div class="popup-title">风险分区</div>
-        <div class="popup-badge ${risk.className}">${risk.label}</div>
-      </div>
-      <div class="popup-metrics">
-        <div class="popup-metric"><span>影响面积</span><strong>${areaKm2.toFixed(2)} km²</strong></div>
-        <div class="popup-metric"><span>数据来源</span><strong>坝区模型实时推演</strong></div>
-      </div>
-    </div>
-  `
-}
-
-const fitMapToScene = (map: L.Map) => {
-  map.fitBounds(L.latLngBounds(REGION_BOUNDARY), {
-    padding: [32, 32],
-    maxZoom: 12.3
-  })
-}
-
-const getRiskBorderColor = (riskLevel: FloodGridPoint['risk_level']) => {
-  switch (riskLevel) {
-    case 'extreme':
-      return 'rgba(255, 94, 108, 0.96)'
-    case 'high':
-      return 'rgba(255, 166, 89, 0.9)'
-    case 'medium':
-      return 'rgba(255, 214, 102, 0.84)'
-    default:
-      return 'rgba(79, 213, 255, 0.82)'
-  }
-}
+const buildKeyPointPopup = (point: AffectedKeyPoint) => `
+  <div class="map-popup">
+    <strong>${point.name}</strong>
+    <span>${point.type} · ${RISK_COPY[point.risk_level].label}</span>
+    <span>影响水深 ${point.water_depth.toFixed(2)} m</span>
+  </div>
+`
 
 export const FloodMap: React.FC<FloodMapProps> = ({
   floodGrid,
@@ -275,603 +387,426 @@ export const FloodMap: React.FC<FloodMapProps> = ({
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
+  const scaleControlRef = useRef<L.Control.Scale | null>(null)
   const layersRef = useRef<{
-    stage: L.LayerGroup
+    context: L.LayerGroup
     zones: L.LayerGroup
     flood: L.LayerGroup
     velocity: L.LayerGroup
     sensors: L.LayerGroup
     routes: L.LayerGroup
     keyPoints: L.LayerGroup
-    legend: L.Control
   } | null>(null)
+
+  const context = useMemo(() => resolveContext(floodGrid, sensors, keyPoints), [floodGrid, sensors, keyPoints])
+  const floodedPoints = useMemo(() => floodGrid.filter((point) => point.flooded), [floodGrid])
+  const maxDepth = useMemo(() => floodedPoints.reduce((max, point) => Math.max(max, point.depth), 0), [floodedPoints])
+  const floodedAreaLabel = useMemo(() => {
+    if (floodedPoints.length === 0) {
+      return '0.0 km²'
+    }
+    const latStep = inferGridStep(floodGrid.map((point) => point.lat), 0.0055)
+    const lngStep = inferGridStep(floodGrid.map((point) => point.lng), 0.0055)
+    const meanLat = floodedPoints.reduce((sum, point) => sum + point.lat, 0) / floodedPoints.length
+    const cellAreaKm2 = Math.abs(latStep * 111 * lngStep * 111 * Math.cos((meanLat * Math.PI) / 180))
+    return `${(cellAreaKm2 * floodedPoints.length).toFixed(1)} km²`
+  }, [floodGrid, floodedPoints])
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) {
       return
     }
 
-    const container = mapContainerRef.current as HTMLElement & { _leaflet_id?: number }
+    const container = mapContainerRef.current as HTMLDivElement & { _leaflet_id?: number }
     if (container._leaflet_id) {
       delete container._leaflet_id
     }
 
-    try {
-      const map = L.map(mapContainerRef.current, {
-        zoomControl: false,
-        attributionControl: false,
-        preferCanvas: true
-      }).setView(DEFAULT_VIEW, DEFAULT_ZOOM)
+    const map = L.map(mapContainerRef.current, {
+      zoomControl: false,
+      attributionControl: true,
+      preferCanvas: true,
+      minZoom: 8,
+      maxZoom: 17
+    }).setView(context.center, context.zoom)
 
-      const stageLayerGroup = L.layerGroup().addTo(map)
-      const zonesLayerGroup = L.layerGroup().addTo(map)
-      const floodLayerGroup = L.layerGroup().addTo(map)
-      const velocityLayerGroup = L.layerGroup().addTo(map)
-      const sensorsLayerGroup = L.layerGroup().addTo(map)
-      const routesLayerGroup = L.layerGroup().addTo(map)
-      const keyPointsLayerGroup = L.layerGroup().addTo(map)
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 17,
+      attribution: 'Tiles © Esri · Source: Esri, Maxar, Earthstar Geographics and GIS User Community'
+    }).addTo(map)
 
-      const extrudedSteps = [
-        { latOffset: -0.02, lngOffset: 0.015, fill: 'rgba(6, 34, 48, 0.96)', opacity: 0.88 },
-        { latOffset: -0.04, lngOffset: 0.03, fill: 'rgba(4, 24, 36, 0.92)', opacity: 0.82 },
-        { latOffset: -0.06, lngOffset: 0.045, fill: 'rgba(3, 16, 26, 0.88)', opacity: 0.76 }
-      ]
+    const contextLayerGroup = L.layerGroup().addTo(map)
+    const zonesLayerGroup = L.layerGroup().addTo(map)
+    const floodLayerGroup = L.layerGroup().addTo(map)
+    const velocityLayerGroup = L.layerGroup().addTo(map)
+    const sensorsLayerGroup = L.layerGroup().addTo(map)
+    const routesLayerGroup = L.layerGroup().addTo(map)
+    const keyPointsLayerGroup = L.layerGroup().addTo(map)
 
-      extrudedSteps.forEach((step, index) => {
-        stageLayerGroup.addLayer(
-          L.polygon(shiftPolygon(REGION_BOUNDARY, step.latOffset, step.lngOffset), {
-            color: 'rgba(0,0,0,0)',
-            fillColor: step.fill,
-            fillOpacity: step.opacity,
-            className: `region-depth-shell region-depth-${index + 1}`
-          })
-        )
-      })
-
-      CONTOUR_BANDS.forEach((band) => {
-        stageLayerGroup.addLayer(
-          L.polygon(band.points, {
-            color: 'rgba(143, 241, 255, 0.14)',
-            weight: 1,
-            opacity: band.opacity,
-            fillColor: band.fill,
-            fillOpacity: band.opacity,
-            className: band.className
-          })
-        )
-      })
-
-      stageLayerGroup.addLayer(
-        L.polygon(RESERVOIR_POLYGON, {
-          color: 'rgba(114, 225, 255, 0.9)',
-          weight: 1.5,
-          fillColor: 'rgba(75, 196, 255, 0.18)',
-          fillOpacity: 0.38,
-          className: 'reservoir-polygon'
-        })
-      )
-
-      stageLayerGroup.addLayer(
-        L.polygon(REGION_BOUNDARY, {
-          color: 'rgba(118, 235, 255, 0.95)',
-          weight: 3.2,
-          opacity: 0.96,
-          fillColor: 'rgba(148, 255, 194, 0.2)',
-          fillOpacity: 0.3,
-          className: 'region-boundary-glow'
-        })
-      )
-
-      stageLayerGroup.addLayer(
-        L.polygon(REGION_BOUNDARY, {
-          color: 'rgba(255, 245, 180, 0.86)',
-          weight: 1.25,
-          opacity: 0.8,
-          fillColor: 'rgba(121, 236, 255, 0.08)',
-          fillOpacity: 0.12,
-          dashArray: '8, 10',
-          className: 'region-boundary-inner'
-        })
-      )
-
-      stageLayerGroup.addLayer(
-        L.polyline(DAM_AXIS, {
-          color: '#ffd470',
-          weight: 6,
-          opacity: 0.95,
-          className: 'dam-axis-line'
-        })
-      )
-      stageLayerGroup.addLayer(
-        L.polyline(DOWNSTREAM_SECTION, {
-          color: '#ff8b5c',
-          weight: 3,
-          opacity: 0.88,
-          dashArray: '10, 8',
-          className: 'downstream-section-line'
-        })
-      )
-
-      stageLayerGroup.addLayer(
-        L.polyline(MAIN_RIVER, {
-          color: '#64ebff',
-          weight: 7,
-          opacity: 0.36,
-          className: 'region-river-main-glow'
-        })
-      )
-      stageLayerGroup.addLayer(
-        L.polyline(MAIN_RIVER, {
-          color: '#bfffff',
-          weight: 3,
-          opacity: 0.96,
-          className: 'region-river-main'
-        })
-      )
-
-      BRANCH_RIVERS.forEach((river, index) => {
-        stageLayerGroup.addLayer(
-          L.polyline(river, {
-            color: '#8df3ff',
-            weight: 2,
-            opacity: 0.76,
-            className: `region-river-branch region-river-branch-${index + 1}`
-          })
-        )
-      })
-
-      STAGE_LABELS.forEach((label) => {
-        const icon = L.divIcon({
-          className: 'stage-label-marker',
-          html: `<div class="stage-label-chip">${label.name}</div>`,
-          iconSize: [126, 28],
-          iconAnchor: [63, 14]
-        })
-
-        stageLayerGroup.addLayer(L.marker([label.lat, label.lng], { icon, interactive: false }))
-      })
-
-      const damIcon = L.divIcon({
-        className: 'dam-marker',
-        html: '<div class="dam-marker-core">坝</div>',
-        iconSize: [34, 34],
-        iconAnchor: [17, 17]
-      })
-      stageLayerGroup.addLayer(L.marker([39.537193, -121.485565], { icon: damIcon, interactive: false }))
-
-      const beaconIcon = L.divIcon({
-        className: 'map-beacon-marker',
-        html: '<div class="map-beacon-core"></div>',
-        iconSize: [20, 20],
-        iconAnchor: [10, 10]
-      })
-      stageLayerGroup.addLayer(L.marker([39.52155294, -121.5477477], { icon: beaconIcon, interactive: false }))
-
-      const legend = new L.Control({ position: 'bottomright' })
-      legend.onAdd = () => {
-        const div = L.DomUtil.create('div', 'flood-legend')
-        div.innerHTML = `
-          <div class="legend-title">坝区洪水图例</div>
-          <div class="legend-item"><span class="legend-color risk-extreme"></span><span>极高风险 · 深度 &gt; 2.0 m</span></div>
-          <div class="legend-item"><span class="legend-color risk-high"></span><span>高风险 · 深度 1.0 - 2.0 m</span></div>
-          <div class="legend-item"><span class="legend-color risk-medium"></span><span>中风险 · 深度 0.5 - 1.0 m</span></div>
-          <div class="legend-item"><span class="legend-color risk-low"></span><span>低风险 · 深度 &lt; 0.5 m</span></div>
-        `
-        return div
+    const zoomControl = new L.Control({ position: 'topright' })
+    zoomControl.onAdd = () => {
+      const div = L.DomUtil.create('div', 'map-topic-tools')
+      div.innerHTML = `
+        <button type="button" class="map-tool-btn map-zoom-in">+</button>
+        <button type="button" class="map-tool-btn map-zoom-out">-</button>
+        <button type="button" class="map-tool-btn map-fit">复位</button>
+        <button type="button" class="map-tool-btn map-fullscreen">全屏</button>
+      `
+      L.DomEvent.disableClickPropagation(div)
+      ;(div.querySelector('.map-zoom-in') as HTMLButtonElement).onclick = () => map.zoomIn()
+      ;(div.querySelector('.map-zoom-out') as HTMLButtonElement).onclick = () => map.zoomOut()
+      ;(div.querySelector('.map-fit') as HTMLButtonElement).onclick = () => map.fitBounds(asLatLngBounds(context.bounds), { padding: [26, 26] })
+      ;(div.querySelector('.map-fullscreen') as HTMLButtonElement).onclick = () => {
+        void mapContainerRef.current?.parentElement?.requestFullscreen?.()
       }
-      legend.addTo(map)
-
-      const stageControl = new L.Control({ position: 'topright' })
-      stageControl.onAdd = () => {
-        const div = L.DomUtil.create('div', 'flood-stage-control')
-        div.innerHTML = `
-          <button class="stage-btn zoom-in-btn" title="放大场景">+</button>
-          <button class="stage-btn zoom-out-btn" title="缩小场景">-</button>
-          <button class="stage-btn fit-btn" title="回到流域主视角">定位</button>
-          <button class="stage-btn fullscreen-btn" title="全屏查看">全屏</button>
-        `
-
-        const zoomInButton = div.querySelector('.zoom-in-btn') as HTMLButtonElement
-        const zoomOutButton = div.querySelector('.zoom-out-btn') as HTMLButtonElement
-        const fitButton = div.querySelector('.fit-btn') as HTMLButtonElement
-        const fullscreenButton = div.querySelector('.fullscreen-btn') as HTMLButtonElement
-
-        L.DomEvent.disableClickPropagation(div)
-        zoomInButton.onclick = () => map.zoomIn()
-        zoomOutButton.onclick = () => map.zoomOut()
-        fitButton.onclick = () => fitMapToScene(map)
-        fullscreenButton.onclick = () => {
-          void mapContainerRef.current?.requestFullscreen?.()
-        }
-
-        return div
-      }
-      stageControl.addTo(map)
-
-      fitMapToScene(map)
-
-      mapRef.current = map
-      layersRef.current = {
-        stage: stageLayerGroup,
-        zones: zonesLayerGroup,
-        flood: floodLayerGroup,
-        velocity: velocityLayerGroup,
-        sensors: sensorsLayerGroup,
-        routes: routesLayerGroup,
-        keyPoints: keyPointsLayerGroup,
-        legend
-      }
-    } catch (error) {
-      console.error('Leaflet 场景地图初始化失败', error)
+      return div
     }
-  }, [])
+    zoomControl.addTo(map)
+
+    scaleControlRef.current = L.control.scale({ position: 'bottomleft', metric: true, imperial: false }).addTo(map)
+
+    mapRef.current = map
+    layersRef.current = {
+      context: contextLayerGroup,
+      zones: zonesLayerGroup,
+      flood: floodLayerGroup,
+      velocity: velocityLayerGroup,
+      sensors: sensorsLayerGroup,
+      routes: routesLayerGroup,
+      keyPoints: keyPointsLayerGroup
+    }
+  }, [context.bounds, context.center, context.zoom])
 
   useEffect(() => {
-    if (!layersRef.current) {
+    const map = mapRef.current
+    const layers = layersRef.current
+    if (!map || !layers) {
       return
     }
 
-    const zonesLayerGroup = layersRef.current.zones
-    zonesLayerGroup.clearLayers()
+    layers.context.clearLayers()
+
+    layers.context.addLayer(
+      L.polygon(context.bounds, {
+        color: '#fff1b8',
+        weight: 2,
+        opacity: 0.92,
+        fillColor: '#102d1e',
+        fillOpacity: 0.08,
+        dashArray: '10, 8',
+        className: 'study-boundary'
+      })
+    )
+
+    context.waterBodies.forEach((polygon) => {
+      layers.context.addLayer(
+        L.polygon(polygon, {
+          color: '#77d9ff',
+          weight: 1.4,
+          opacity: 0.84,
+          fillColor: '#005cbd',
+          fillOpacity: 0.28,
+          className: 'water-body-layer'
+        })
+      )
+    })
+
+    context.roads.forEach((road) => {
+      layers.context.addLayer(
+        L.polyline(road.points, {
+          color: '#fff4c7',
+          weight: 2.2,
+          opacity: 0.72,
+          className: 'context-road'
+        }).bindTooltip(road.name, { sticky: true, className: 'topic-tooltip' })
+      )
+    })
+
+    context.rivers.forEach((river) => {
+      layers.context.addLayer(
+        L.polyline(river.points, {
+          color: '#19c9ff',
+          weight: river.name.includes('主') || river.name.includes('Feather') ? 5 : 3,
+          opacity: 0.96,
+          className: 'context-river'
+        }).bindTooltip(river.name, { sticky: true, className: 'topic-tooltip' })
+      )
+    })
+
+    layers.context.addLayer(
+      L.polyline(context.dam.axis, {
+        color: '#ffdf7d',
+        weight: 7,
+        opacity: 0.95,
+        className: 'dam-axis-line'
+      }).bindTooltip(context.dam.name, { sticky: true, className: 'topic-tooltip' })
+    )
+
+    const damIcon = L.divIcon({
+      className: 'topic-dam-marker',
+      html: '<div>坝</div>',
+      iconSize: [34, 34],
+      iconAnchor: [17, 17]
+    })
+    layers.context.addLayer(L.marker([context.dam.lat, context.dam.lng], { icon: damIcon }).bindTooltip(context.dam.name, { className: 'topic-tooltip' }))
+
+    context.settlements.forEach((settlement) => {
+      const icon = L.divIcon({
+        className: `topic-place-marker topic-place-${settlement.type}`,
+        html: `<span></span><strong>${settlement.name}</strong>`,
+        iconSize: [118, 26],
+        iconAnchor: [8, 13]
+      })
+      layers.context.addLayer(L.marker([settlement.lat, settlement.lng], { icon, interactive: false }))
+    })
+
+    map.fitBounds(asLatLngBounds(context.bounds), { padding: [24, 24], animate: false })
+  }, [context])
+
+  useEffect(() => {
+    const layers = layersRef.current
+    if (!layers) {
+      return
+    }
+
+    layers.zones.clearLayers()
 
     riskZones?.features.forEach((feature) => {
-      const latLngRings = feature.geometry.coordinates.map((ring) =>
-        ring.map(([lng, lat]) => [lat, lng] as [number, number])
+      const rings = feature.geometry.coordinates.map((ring) => ring.map(([lng, lat]) => [lat, lng] as LatLng))
+      layers.zones.addLayer(
+        L.polygon(rings, {
+          color: feature.properties.risk_level === 'extreme' ? '#ff5d73' : '#76e5ff',
+          weight: feature.properties.risk_level === 'extreme' ? 2 : 1,
+          opacity: 0.42,
+          fillColor: '#0878ff',
+          fillOpacity: 0.05,
+          dashArray: '8, 9',
+          className: 'risk-contour-layer'
+        })
       )
-      const borderColor = getRiskBorderColor(feature.properties.risk_level)
-
-      const polygon = L.polygon(latLngRings, {
-        color: borderColor,
-        weight: feature.properties.risk_level === 'extreme' ? 1.8 : 1.1,
-        opacity: 0.62,
-        fillColor: feature.properties.color,
-        fillOpacity: feature.properties.risk_level === 'extreme' ? 0.14 : 0.08,
-        dashArray: feature.properties.risk_level === 'extreme' ? undefined : '8, 7',
-        className: `risk-zone-overlay zone-${feature.properties.risk_level}`
-      })
-
-      polygon.bindPopup(buildRiskZonePopup(feature.properties.risk_level, feature.properties.area_km2), {
-        offset: [0, -6],
-        className: 'leaflet-screen-popup'
-      })
-      zonesLayerGroup.addLayer(polygon)
     })
   }, [riskZones])
 
   useEffect(() => {
-    if (!layersRef.current) {
+    const layers = layersRef.current
+    if (!layers) {
       return
     }
 
-    const floodLayerGroup = layersRef.current.flood
-    floodLayerGroup.clearLayers()
+    layers.flood.clearLayers()
 
-    floodGrid.forEach((point) => {
-      if (!point.flooded) {
-        return
-      }
+    const latStep = inferGridStep(floodGrid.map((point) => point.lat), 0.0055)
+    const lngStep = inferGridStep(floodGrid.map((point) => point.lng), 0.0055)
+    const floodEnvelope = buildFloodEnvelope(floodGrid, 0.02, latStep, lngStep)
+    const deepEnvelope = buildFloodEnvelope(floodGrid, 1.0, latStep, lngStep)
+    const extremeEnvelope = buildFloodEnvelope(floodGrid, 2.0, latStep, lngStep)
 
-      const risk = RISK_COPY[point.risk_level]
-      const bounds = L.latLngBounds(
-        [point.lat - GRID_SIZE / 2, point.lng - GRID_SIZE / 2],
-        [point.lat + GRID_SIZE / 2, point.lng + GRID_SIZE / 2]
+    if (floodEnvelope) {
+      layers.flood.addLayer(
+        L.polygon(floodEnvelope, {
+          color: '#0428d8',
+          weight: 1.8,
+          opacity: 0.88,
+          fillColor: '#082be8',
+          fillOpacity: 0.62,
+          className: 'inundation-surface inundation-main'
+        }).bindPopup(buildFloodPopup(maxDepth, '模拟洪水淹没范围'), { className: 'topic-popup-shell' })
       )
+    }
 
-      const rectangle = L.rectangle(bounds, {
-        color: risk.color,
-        weight: 0.45,
-        opacity: 0.36,
-        fillColor: risk.color,
-        fillOpacity:
-          point.risk_level === 'extreme' ? 0.24 : point.risk_level === 'high' ? 0.19 : point.risk_level === 'medium' ? 0.14 : 0.08,
-        className: `flood-rect ${risk.className}`
-      })
+    if (deepEnvelope) {
+      layers.flood.addLayer(
+        L.polygon(deepEnvelope, {
+          color: '#4fd9ff',
+          weight: 1.2,
+          opacity: 0.74,
+          fillColor: '#009dff',
+          fillOpacity: 0.24,
+          className: 'inundation-surface inundation-deep'
+        }).bindPopup(buildFloodPopup(maxDepth, '深水影响区'), { className: 'topic-popup-shell' })
+      )
+    }
 
-      rectangle.bindPopup(buildFloodPopup(point), {
-        offset: [0, -6],
-        className: 'leaflet-screen-popup'
-      })
-      floodLayerGroup.addLayer(rectangle)
+    if (extremeEnvelope) {
+      layers.flood.addLayer(
+        L.polygon(extremeEnvelope, {
+          color: '#ff5570',
+          weight: 1.2,
+          opacity: 0.76,
+          fillColor: '#ff3d5a',
+          fillOpacity: 0.18,
+          className: 'inundation-surface inundation-extreme'
+        }).bindPopup(buildFloodPopup(maxDepth, '极高风险核心区'), { className: 'topic-popup-shell' })
+      )
+    }
 
-      if (point.risk_level === 'high' || point.risk_level === 'extreme') {
-        floodLayerGroup.addLayer(
+    floodedPoints
+      .filter((point) => point.risk_level === 'high' || point.risk_level === 'extreme')
+      .slice(0, 26)
+      .forEach((point) => {
+        layers.flood.addLayer(
           L.circleMarker([point.lat, point.lng], {
-            radius: point.risk_level === 'extreme' ? 8 : 6,
-            color: point.risk_level === 'extreme' ? '#ff5c6f' : '#ffb85f',
-            weight: 0.9,
-            opacity: 0.52,
-            fillColor: point.risk_level === 'extreme' ? '#ff475d' : '#ffc864',
-            fillOpacity: 0.12,
-            className: `risk-hotspot hotspot-${point.risk_level}`
-          })
+            radius: point.risk_level === 'extreme' ? 4.8 : 3.6,
+            color: RISK_COPY[point.risk_level].color,
+            weight: 1,
+            opacity: 0.86,
+            fillColor: RISK_COPY[point.risk_level].color,
+            fillOpacity: 0.8,
+            className: 'risk-dot'
+          }).bindPopup(buildFloodPopup(point.depth, RISK_COPY[point.risk_level].label), { className: 'topic-popup-shell' })
         )
-      }
-    })
-  }, [floodGrid])
+      })
+  }, [floodGrid, floodedPoints, maxDepth])
 
   useEffect(() => {
-    if (!layersRef.current) {
+    const layers = layersRef.current
+    if (!layers) {
       return
     }
 
-    const velocityLayerGroup = layersRef.current.velocity
-    velocityLayerGroup.clearLayers()
-
+    layers.velocity.clearLayers()
     if (!showVelocity) {
       return
     }
 
-    floodGrid.forEach((point) => {
-      if (!point.flooded) {
-        return
-      }
-
-      const velocity = formatVelocity(point)
-      if (velocity < 0.3) {
-        return
-      }
-
-      const angle = Math.atan2(point.vel_v, point.vel_u) * (180 / Math.PI)
-      const arrowLength = Math.min(velocity * 0.01, 0.05)
-      const endLat = point.lat + (arrowLength * Math.cos((angle * Math.PI) / 180)) / 111
-      const endLng = point.lng + (arrowLength * Math.sin((angle * Math.PI) / 180)) / (111 * Math.cos((point.lat * Math.PI) / 180))
-
-      const arrowStyle = {
-        color: '#8fe8ff',
-        weight: 2,
-        opacity: 0.9,
-        dashArray: '5, 5',
-        className: 'velocity-arrow'
-      }
-
-      velocityLayerGroup.addLayer(
-        L.polyline(
-          [
-            [point.lat, point.lng],
-            [endLat, endLng]
-          ],
-          arrowStyle
+    floodedPoints
+      .filter((point) => Math.sqrt(point.vel_u ** 2 + point.vel_v ** 2) >= 0.35)
+      .slice(0, 38)
+      .forEach((point) => {
+        const speed = Math.sqrt(point.vel_u ** 2 + point.vel_v ** 2)
+        const angle = Math.atan2(point.vel_v, point.vel_u)
+        const length = Math.min(speed * 0.004, 0.014)
+        const endLat = point.lat + Math.cos(angle) * length
+        const endLng = point.lng + Math.sin(angle) * length
+        layers.velocity.addLayer(
+          L.polyline(
+            [
+              [point.lat, point.lng],
+              [endLat, endLng]
+            ],
+            {
+              color: '#d7f9ff',
+              weight: 1.5,
+              opacity: 0.62,
+              dashArray: '5, 6',
+              className: 'velocity-thread'
+            }
+          )
         )
-      )
-
-      const arrowSize = 0.02
-      const headLat1 = endLat - (arrowSize * Math.cos(((angle - 30) * Math.PI) / 180)) / 111
-      const headLng1 = endLng - (arrowSize * Math.sin(((angle - 30) * Math.PI) / 180)) / (111 * Math.cos((endLat * Math.PI) / 180))
-      const headLat2 = endLat - (arrowSize * Math.cos(((angle + 30) * Math.PI) / 180)) / 111
-      const headLng2 = endLng - (arrowSize * Math.sin(((angle + 30) * Math.PI) / 180)) / (111 * Math.cos((endLat * Math.PI) / 180))
-
-      velocityLayerGroup.addLayer(L.polyline([[endLat, endLng], [headLat1, headLng1]], arrowStyle))
-      velocityLayerGroup.addLayer(L.polyline([[endLat, endLng], [headLat2, headLng2]], arrowStyle))
-    })
-  }, [floodGrid, showVelocity])
+      })
+  }, [floodedPoints, showVelocity])
 
   useEffect(() => {
-    if (!layersRef.current) {
+    const layers = layersRef.current
+    if (!layers) {
       return
     }
 
-    const sensorsLayerGroup = layersRef.current.sensors
-    sensorsLayerGroup.clearLayers()
+    layers.sensors.clearLayers()
 
     sensors.forEach((sensor) => {
       const status = SENSOR_STATUS_COPY[sensor.status]
+      const isSelected = sensor.station_id === selectedStationId
       const icon = L.divIcon({
-        className: `sensor-marker sensor-${sensor.status}`,
-        html: `
-          <div class="sensor-halo" style="box-shadow: 0 0 20px ${status.color};"></div>
-          <div class="sensor-dot" style="background-color: ${status.color}; box-shadow: 0 0 12px ${status.color};"></div>
-        `,
-        iconSize: [22, 22],
-        iconAnchor: [11, 11]
+        className: `topic-sensor-marker ${isSelected ? 'is-selected' : ''}`,
+        html: `<i style="background:${status.color}; box-shadow:0 0 16px ${status.color};"></i><span>${sensor.name}</span>`,
+        iconSize: [150, 30],
+        iconAnchor: [12, 15]
       })
-
       const marker = L.marker([sensor.lat, sensor.lng], { icon })
-      marker.bindPopup(buildSensorPopup(sensor), {
-        offset: [0, -6],
-        className: 'leaflet-screen-popup'
-      })
+      marker.bindPopup(buildSensorPopup(sensor), { className: 'topic-popup-shell' })
       marker.on('click', () => onStationSelect?.(sensor))
-      sensorsLayerGroup.addLayer(marker)
+      layers.sensors.addLayer(marker)
     })
-  }, [sensors, onStationSelect])
+  }, [onStationSelect, selectedStationId, sensors])
 
   useEffect(() => {
-    if (!layersRef.current) {
+    const layers = layersRef.current
+    if (!layers) {
       return
     }
 
-    const keyPointsLayerGroup = layersRef.current.keyPoints
-    keyPointsLayerGroup.clearLayers()
+    layers.keyPoints.clearLayers()
 
     keyPoints.forEach((point) => {
       if (typeof point.lat !== 'number' || typeof point.lng !== 'number') {
         return
       }
-
-      const color =
-        point.risk_level === 'extreme'
-          ? '#ff6673'
-          : point.risk_level === 'high'
-            ? '#ff9858'
-            : point.risk_level === 'medium'
-              ? '#ffd56f'
-              : '#45f5b0'
-
+      const isSelected = point.id === selectedKeyPointId
+      const risk = RISK_COPY[point.risk_level]
       const icon = L.divIcon({
-        className: `key-point-marker key-point-${point.risk_level} ${selectedKeyPointId === point.id ? 'is-selected' : ''}`,
-        html: `<div class="key-point-core" style="border-color:${color}; box-shadow:0 0 18px ${color}66;">${point.type.slice(0, 1)}</div>`,
-        iconSize: [28, 28],
-        iconAnchor: [14, 14]
+        className: `topic-keypoint-marker ${isSelected ? 'is-selected' : ''}`,
+        html: `<i style="border-color:${risk.color}; color:${risk.color};">${point.type.slice(0, 1).toUpperCase()}</i><span>${point.name}</span>`,
+        iconSize: [142, 30],
+        iconAnchor: [12, 15]
       })
-
       const marker = L.marker([point.lat, point.lng], { icon })
-      marker.bindPopup(
-        `
-        <div class="screen-popup sensor-popup">
-          <div class="popup-title-row">
-            <div>
-              <div class="popup-title">${point.name}</div>
-              <div class="popup-subtitle">${point.type}</div>
-            </div>
-            <div class="popup-badge" style="border-color:${color}; color:${color};">${point.risk_level}</div>
-          </div>
-          <div class="popup-grid">
-            <div class="popup-grid-item"><span>积水深度</span><strong>${point.water_depth.toFixed(2)} m</strong></div>
-            <div class="popup-grid-item"><span>对象类别</span><strong>${point.type}</strong></div>
-          </div>
-        </div>
-        `,
-        {
-          offset: [0, -6],
-          className: 'leaflet-screen-popup'
-        }
-      )
+      marker.bindPopup(buildKeyPointPopup(point), { className: 'topic-popup-shell' })
       marker.on('click', () => onKeyPointSelect?.(point))
-      keyPointsLayerGroup.addLayer(marker)
+      layers.keyPoints.addLayer(marker)
     })
   }, [keyPoints, onKeyPointSelect, selectedKeyPointId])
 
   useEffect(() => {
-    if (!layersRef.current) {
+    const layers = layersRef.current
+    if (!layers) {
       return
     }
 
-    const routesLayerGroup = layersRef.current.routes
-    routesLayerGroup.clearLayers()
-
+    layers.routes.clearLayers()
     if (!showRoutes) {
       return
     }
 
     evacuationRoutes.forEach((route) => {
-      const routeStyle = ROUTE_STATUS_COPY[route.status]
-      const pathLine = L.polyline(
-        [
-          [route.origin.lat, route.origin.lng],
-          ...route.waypoints.map((waypoint) => [waypoint.lat, waypoint.lng] as [number, number]),
-          [route.destination.lat, route.destination.lng]
-        ],
-        {
-          color: routeStyle.color,
-          weight: 3,
-          opacity: 0.9,
-          dashArray: routeStyle.dashArray,
-          className: `evacuation-route route-${route.status}`
-        }
+      const style = ROUTE_STATUS_COPY[route.status]
+      const isSelected = route.id === selectedRouteId
+      layers.routes.addLayer(
+        L.polyline(
+          [
+            [route.origin.lat, route.origin.lng],
+            ...route.waypoints.map((waypoint) => [waypoint.lat, waypoint.lng] as LatLng),
+            [route.destination.lat, route.destination.lng]
+          ],
+          {
+            color: style.color,
+            weight: isSelected ? 4 : 2.4,
+            opacity: isSelected ? 0.96 : 0.62,
+            dashArray: style.dashArray,
+            className: 'evacuation-route-line'
+          }
+        ).bindTooltip(`${route.origin.name} → ${route.destination.name}`, { sticky: true, className: 'topic-tooltip' })
       )
-
-      const midPoint = route.waypoints[Math.floor(route.waypoints.length / 2)] || {
-        lat: (route.origin.lat + route.destination.lat) / 2,
-        lng: (route.origin.lng + route.destination.lng) / 2
-      }
-
-      pathLine.bindPopup(buildRoutePopup(route), {
-        autoClose: false,
-        offset: [0, -6],
-        className: 'leaflet-screen-popup'
-      })
-
-      pathLine.on('mouseover', () => {
-        pathLine.openPopup(midPoint)
-        pathLine.setStyle({ weight: 4.5, opacity: 1 })
-      })
-
-      pathLine.on('mouseout', () => {
-        pathLine.closePopup()
-        pathLine.setStyle({ weight: 3, opacity: 0.9 })
-      })
-
-      routesLayerGroup.addLayer(pathLine)
-
-      const originIcon = L.divIcon({
-        className: 'route-marker origin-marker',
-        html: '<div class="marker-dot">起</div>',
-        iconSize: [26, 26],
-        iconAnchor: [13, 13]
-      })
-
-      const destinationIcon = L.divIcon({
-        className: 'route-marker dest-marker',
-        html: '<div class="marker-dot">终</div>',
-        iconSize: [26, 26],
-        iconAnchor: [13, 13]
-      })
-
-      routesLayerGroup.addLayer(L.marker([route.origin.lat, route.origin.lng], { icon: originIcon }))
-      routesLayerGroup.addLayer(L.marker([route.destination.lat, route.destination.lng], { icon: destinationIcon }))
     })
-  }, [evacuationRoutes, showRoutes])
+  }, [evacuationRoutes, selectedRouteId, showRoutes])
 
   useEffect(() => {
-    if (!mapRef.current) {
+    const map = mapRef.current
+    if (!map || !selectedStationId) {
       return
     }
-
-    if (sensors.length >= 2) {
-      mapRef.current.fitBounds(L.latLngBounds(sensors.map((sensor) => [sensor.lat, sensor.lng] as [number, number])), {
-        padding: [44, 44],
-        maxZoom: 12.5
-      })
-      return
-    }
-
-    fitMapToScene(mapRef.current)
-  }, [sensors])
-
-  useEffect(() => {
-    if (!mapRef.current || !selectedStationId) {
-      return
-    }
-
     const station = sensors.find((item) => item.station_id === selectedStationId)
-    if (!station) {
-      return
+    if (station) {
+      map.flyTo([station.lat, station.lng], Math.max(map.getZoom(), 12.5), { duration: 0.55 })
     }
-
-    mapRef.current.flyTo([station.lat, station.lng], Math.max(mapRef.current.getZoom(), 12.5), {
-      duration: 0.6
-    })
   }, [selectedStationId, sensors])
 
   useEffect(() => {
-    if (!mapRef.current || !selectedRouteId) {
+    const map = mapRef.current
+    if (!map || !selectedKeyPointId) {
       return
     }
-
-    const route = evacuationRoutes.find((item) => item.id === selectedRouteId)
-    if (!route) {
-      return
-    }
-
-    const points: [number, number][] = [
-      [route.origin.lat, route.origin.lng],
-      ...route.waypoints.map((waypoint) => [waypoint.lat, waypoint.lng] as [number, number]),
-      [route.destination.lat, route.destination.lng]
-    ]
-
-    mapRef.current.fitBounds(L.latLngBounds(points), {
-      padding: [60, 60],
-      maxZoom: 13
-    })
-  }, [evacuationRoutes, selectedRouteId])
-
-  useEffect(() => {
-    if (!mapRef.current || !selectedKeyPointId) {
-      return
-    }
-
     const point = keyPoints.find((item) => item.id === selectedKeyPointId && typeof item.lat === 'number' && typeof item.lng === 'number')
-    if (!point || typeof point.lat !== 'number' || typeof point.lng !== 'number') {
-      return
+    if (point && typeof point.lat === 'number' && typeof point.lng === 'number') {
+      map.flyTo([point.lat, point.lng], Math.max(map.getZoom(), 12.5), { duration: 0.55 })
     }
-
-    mapRef.current.flyTo([point.lat, point.lng], Math.max(mapRef.current.getZoom(), 12.8), {
-      duration: 0.6
-    })
   }, [keyPoints, selectedKeyPointId])
 
   useEffect(() => {
     return () => {
+      if (scaleControlRef.current && mapRef.current) {
+        scaleControlRef.current.remove()
+      }
       if (mapRef.current) {
         mapRef.current.remove()
         mapRef.current = null
@@ -880,5 +815,42 @@ export const FloodMap: React.FC<FloodMapProps> = ({
     }
   }, [])
 
-  return <div ref={mapContainerRef} className="flood-map-container" />
+  return (
+    <div className="flood-map-container">
+      <div ref={mapContainerRef} className="flood-leaflet-host" />
+
+      <div className="topic-map-title">
+        <span>FLOOD INUNDATION THEMATIC MAP</span>
+        <strong>{context.title}</strong>
+        <em>{context.subtitle}</em>
+      </div>
+
+      <div className="topic-map-compass" aria-label="north arrow">
+        <span>N</span>
+        <i />
+      </div>
+
+      <div className="topic-map-stats">
+        <div>
+          <span>淹没面积</span>
+          <strong>{floodedAreaLabel}</strong>
+        </div>
+        <div>
+          <span>最大水深</span>
+          <strong>{maxDepth.toFixed(2)} m</strong>
+        </div>
+      </div>
+
+      <div className="topic-map-legend">
+        <strong>图例</strong>
+        <span><i className="legend-flood" />模拟淹没范围</span>
+        <span><i className="legend-deep" />深水影响区</span>
+        <span><i className="legend-river" />河道 / 水系</span>
+        <span><i className="legend-road" />主要道路</span>
+        <span><i className="legend-point" />监测点 / 关键对象</span>
+      </div>
+
+      <div className="topic-map-source">{context.source}</div>
+    </div>
+  )
 }
