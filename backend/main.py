@@ -31,7 +31,7 @@ from config import (
 )
 from models.hydraulic import SWEModel
 from models.risk_assessment import RiskAssessor
-from routers import flood, predict, risk, sensors
+from routers import flood, historical, predict, report, risk, sensors
 
 
 app = FastAPI(title=APP_TITLE, description="坝区洪水预警与指挥系统后端", version=APP_VERSION)
@@ -225,6 +225,8 @@ app.include_router(flood.router)
 app.include_router(sensors.router)
 app.include_router(predict.router)
 app.include_router(risk.router)
+app.include_router(report.router)
+app.include_router(historical.router)
 
 
 @app.get("/")

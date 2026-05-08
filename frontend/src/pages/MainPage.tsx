@@ -41,9 +41,9 @@ const formatCaseNumber = (value?: number, fractionDigits = 0) =>
   typeof value === 'number' ? value.toLocaleString('zh-CN', { maximumFractionDigits: fractionDigits }) : '-'
 
 const DATA_STATUS_COPY = {
-  live: { label: 'LIVE 实时', tone: 'good', detail: '已连通 USGS 实时接口，可用于当前观测链路。' },
+  live: { label: 'LIVE 实时', tone: 'good', detail: '已连通和风天气实时接口，可用于当前观测链路。' },
   cached: { label: 'CACHE 缓存', tone: 'warn', detail: '实时源暂不可达，正在使用最近一次成功抓取的数据。' },
-  offline_seed: { label: 'SEED 离线种子', tone: 'muted', detail: '当前网络拦截 USGS，先用透明离线种子跑通流程，不冒充实时。' },
+  offline_seed: { label: 'SEED 离线种子', tone: 'muted', detail: '当前无法连接气象服务，先用季节统计数据跑通流程，不冒充实时。' },
   unavailable: { label: 'DOWN 不可达', tone: 'danger', detail: '实时源和缓存都不可用，需要先恢复外部网络链路。' }
 } as const
 
@@ -56,40 +56,40 @@ const SCENARIO_PRESETS: Array<{
   {
     key: 'routine-release',
     name: '常规泄洪',
-    description: '中等来流配合常规泄量，适合日常值守和库区调度复盘。',
+    description: '中等来流配合常规泄量，适合日常值守和桑干河库区调度复盘。',
     params: {
       rainfall_intensity: 35,
-      upstream_inflow: 1200,
+      upstream_inflow: 120,
       duration_hours: 18,
-      gate_release: 900,
-      downstream_level: 50.5,
-      reservoir_level: 266
+      gate_release: 90,
+      downstream_level: 1020.5,
+      reservoir_level: 1048
     }
   },
   {
     key: 'storm-runoff',
     name: '强降雨来水',
-    description: '持续强降雨叠加上游来流抬升，用于检验 Oroville 下游站点和城区风险演化。',
+    description: '持续强降雨叠加上游来流抬升，检验怀仁段下游断面和市区风险演化。',
     params: {
       rainfall_intensity: 95,
-      upstream_inflow: 2100,
+      upstream_inflow: 350,
       duration_hours: 24,
-      gate_release: 1400,
-      downstream_level: 52.0,
-      reservoir_level: 270
+      gate_release: 280,
+      downstream_level: 1022.0,
+      reservoir_level: 1052
     }
   },
   {
     key: 'downstream-blocking',
     name: '下游顶托',
-    description: '下游控制水位偏高，适合检查坝后断面和下游滞洪压力。',
+    description: '下游控制水位偏高，检查桑干河大桥断面和下游滞洪压力。',
     params: {
       rainfall_intensity: 60,
-      upstream_inflow: 1700,
+      upstream_inflow: 220,
       duration_hours: 20,
-      gate_release: 1050,
-      downstream_level: 55.0,
-      reservoir_level: 268
+      gate_release: 150,
+      downstream_level: 1024.0,
+      reservoir_level: 1050
     }
   },
   {
@@ -98,11 +98,24 @@ const SCENARIO_PRESETS: Array<{
     description: '高库水位叠加大流量入库，用于应急演练和最不利工况推演。',
     params: {
       rainfall_intensity: 120,
-      upstream_inflow: 3200,
+      upstream_inflow: 650,
       duration_hours: 30,
-      gate_release: 2600,
-      downstream_level: 56.5,
-      reservoir_level: 274
+      gate_release: 500,
+      downstream_level: 1026.5,
+      reservoir_level: 1058
+    }
+  },
+  {
+    key: 'dam-breach',
+    name: '溃坝情景',
+    description: '模拟水库部分溃口（50m宽），基于堰流+Muskingum演算，推演怀仁市区级联风险链。',
+    params: {
+      rainfall_intensity: 150,
+      upstream_inflow: 850,
+      duration_hours: 12,
+      gate_release: 0,
+      downstream_level: 1028.0,
+      reservoir_level: 1065
     }
   }
 ]
@@ -223,19 +236,8 @@ export const MainPage: React.FC = () => {
   React.useEffect(() => {
     if (!simulationStatus?.is_running) {
       setStartingSimulation(false)
-      return
     }
-
-    const timer = window.setInterval(async () => {
-      try {
-        await refetchRealtime()
-      } catch (stepError) {
-        console.error('Failed to refresh simulation state:', stepError)
-      }
-    }, 1600)
-
-    return () => window.clearInterval(timer)
-  }, [refetchRealtime, simulationStatus?.is_running])
+  }, [simulationStatus?.is_running])
 
   const runSimulation = useCallback(
     async (params: SimulationParams) => {
@@ -308,7 +310,7 @@ export const MainPage: React.FC = () => {
   const handleHistoricalReplay = useCallback(async () => {
     setStartingHistoricalReplay(true)
     setActiveNav('洪水预演')
-    setActiveScenarioKey('oroville-2017')
+    setActiveScenarioKey('sanggan-1996')
     try {
       const result = await startHistoricalReplay()
       setRainfallIntensity(result.rainfall_mm_h)
@@ -317,7 +319,7 @@ export const MainPage: React.FC = () => {
       setGateRelease(result.gate_release_m3s)
       setDownstreamLevel(result.downstream_level_m)
       setReservoirLevel(result.reservoir_level_m)
-      setActiveScenarioName('2017 Oroville 历史回放')
+      setActiveScenarioName('1996 桑干河历史回放')
       await refetchRealtime()
     } finally {
       setStartingHistoricalReplay(false)
@@ -590,7 +592,7 @@ export const MainPage: React.FC = () => {
         </div>
         <div className="overview-card">
           <span>当前焦点</span>
-          <strong>{selectedStation?.name || simulationStatus?.dam_name || 'Oroville Dam'}</strong>
+          <strong>{selectedStation?.name || simulationStatus?.dam_name || '桑干河怀仁段'}</strong>
           <em>{selectedStation ? `${selectedStation.water_level.toFixed(2)} m · ${selectedStationLevel?.label}` : '等待站点联动'}</em>
         </div>
       </section>
@@ -710,8 +712,8 @@ export const MainPage: React.FC = () => {
             <div className="map-stage-title">
               <span className="module-orb" />
               <div>
-                <h3>Oroville Dam 洪水预警主视图</h3>
-                <p>坝体、库区、Feather River 河道、风险层与监测站联动</p>
+                <h3>桑干河怀仁段 洪水预警主视图</h3>
+                <p>坝体、库区、桑干河河道、风险层与监测站联动</p>
               </div>
             </div>
             <div className="map-stage-tools">
@@ -732,6 +734,12 @@ export const MainPage: React.FC = () => {
               </button>
               <button className="tool-chip case-fullscreen-link" onClick={() => { window.location.href = '/case-data' }}>
                 案例全屏
+              </button>
+              <button className="tool-chip" onClick={() => { window.open('http://localhost:8000/api/report/pdf', '_blank') }} title="导出当前态势为PDF报告">
+                导出报告
+              </button>
+              <button className="tool-chip" onClick={() => { window.location.href = '/?page=pinn' }} title="PINN技术说明页">
+                PINN
               </button>
               <div className="map-badge">
                 <span>{mapBadgeLabel}</span>
@@ -806,7 +814,7 @@ export const MainPage: React.FC = () => {
             <div className="focus-detail-card">
               <div className="focus-detail-head">
                 <div>
-                  <span>{simulationStatus?.dam_name || 'Oroville Dam'}</span>
+                  <span>{simulationStatus?.dam_name || '桑干河怀仁段'}</span>
                   <strong>{selectedStation?.name || '选择一个监测站点'}</strong>
                 </div>
                 <div className="command-badge" style={{ color: selectedStationLevel?.color, borderColor: `${selectedStationLevel?.color || '#6edcff'}66` }}>
@@ -898,9 +906,9 @@ export const MainPage: React.FC = () => {
                 <div className="case-data-panel">
                   <div className="case-identity-card">
                     <span>当前落地案例</span>
-                    <strong>{caseProfile?.dam.name || simulationStatus?.dam_name || 'Oroville Dam / Lake Oroville'}</strong>
+                    <strong>{caseProfile?.dam.name || simulationStatus?.dam_name || '桑干河怀仁段水利枢纽'}</strong>
                     <p>
-                      {caseProfile?.dam.river || 'Feather River'} · {formatCaseCoordinate(caseProfile?.dam.lat)},{' '}
+                      {caseProfile?.dam.river || '桑干河'} · {formatCaseCoordinate(caseProfile?.dam.lat)},{' '}
                       {formatCaseCoordinate(caseProfile?.dam.lng)}
                     </p>
                   </div>
@@ -921,7 +929,7 @@ export const MainPage: React.FC = () => {
                     <div>
                       <span>监测站</span>
                       <strong>{caseStations.length}</strong>
-                      <em>USGS / 坝区联动站点</em>
+                      <em>怀仁水文局 / 坝区联动站点</em>
                     </div>
                     <div>
                       <span>关键对象</span>
@@ -944,14 +952,14 @@ export const MainPage: React.FC = () => {
                     </div>
                     <div className="case-data-grid">
                       <div>
-                        <span>USGS 时序</span>
+                        <span>气象时序</span>
                         <strong className={realDataStatus?.usgs.status === 'live' ? 'case-status-good' : ''}>{dataStatus}</strong>
                         <em>{usgsLiveSeriesCount.toLocaleString('zh-CN')} 条观测样本</em>
                       </div>
                       <div>
                         <span>历史校准事件</span>
-                        <strong>{historicalEvent?.event_id || 'oroville_2017'}</strong>
-                        <em>{historicalEvent?.period.start.slice(0, 10) || '2017-02-06'} 起</em>
+                        <strong>{historicalEvent?.event_id || 'sanggan_1996'}</strong>
+                        <em>{historicalEvent?.period.start.slice(0, 10) || '1996-08-04'} 起</em>
                       </div>
                     </div>
                     <div className="real-series-list">
@@ -988,7 +996,7 @@ export const MainPage: React.FC = () => {
                       </div>
                     )}
                     <button type="button" className="historical-replay-button" onClick={handleHistoricalReplay} disabled={startingHistoricalReplay}>
-                      {startingHistoricalReplay ? '正在启动 2017 回放...' : '运行 2017 Oroville 历史回放'}
+                      {startingHistoricalReplay ? '正在启动 1996 回放...' : '运行 1996 桑干河历史回放'}
                     </button>
                   </section>
 
@@ -1008,7 +1016,7 @@ export const MainPage: React.FC = () => {
                       </div>
                       <div>
                         <span>案例编号</span>
-                        <strong>{caseProfile?.case_id || 'oroville_dam'}</strong>
+                        <strong>{caseProfile?.case_id || 'sanggan_river_huairen'}</strong>
                       </div>
                     </div>
                   </section>
@@ -1051,7 +1059,7 @@ export const MainPage: React.FC = () => {
                       <span>接口返回</span>
                     </div>
                     <div className="case-source-list">
-                      {(caseProfile?.data_sources || ['USGS station metadata', 'Oroville Dam public coordinates', 'local DEM raster cache']).map(
+                      {(caseProfile?.data_sources || ['怀仁水文站实测数据', '桑干河怀仁段DEM地形', '和风天气API', '本地DEM栅格缓存']).map(
                         (source) => (
                           <span key={source}>{source}</span>
                         )
@@ -1065,17 +1073,17 @@ export const MainPage: React.FC = () => {
         </aside>
       </main>
 
-      <section className="case-workspace-panel" aria-label="Oroville Dam 妗堜緥鏁版嵁宸ヤ綔鍙?">
+      <section className="case-workspace-panel" aria-label="桑干河怀仁段 案例数据工作台">
         <div className="case-workspace-head">
           <div>
             <span>CASE DATA WORKSPACE</span>
-            <h3>{caseProfile?.dam.name || simulationStatus?.dam_name || 'Oroville Dam / Lake Oroville'}</h3>
+            <h3>{caseProfile?.dam.name || simulationStatus?.dam_name || '桑干河怀仁段水利枢纽'}</h3>
             <p>
-              {caseProfile?.dam.river || 'Feather River'} · {formatCaseCoordinate(caseProfile?.dam.lat)}, {formatCaseCoordinate(caseProfile?.dam.lng)}
+              {caseProfile?.dam.river || '桑干河'} · {formatCaseCoordinate(caseProfile?.dam.lat)}, {formatCaseCoordinate(caseProfile?.dam.lng)}
             </p>
           </div>
           <button type="button" className="historical-replay-button case-workspace-action" onClick={handleHistoricalReplay} disabled={startingHistoricalReplay}>
-            {startingHistoricalReplay ? '正在启动 2017 回放...' : '运行 2017 历史回放'}
+            {startingHistoricalReplay ? '正在启动 1996 回放...' : '运行 1996 桑干河历史回放'}
           </button>
         </div>
 
@@ -1091,14 +1099,14 @@ export const MainPage: React.FC = () => {
             <p>{caseProfile ? `${caseProfile.grid.rows} x ${caseProfile.grid.cols} · ${demCacheMode}` : demCacheMode}</p>
           </div>
           <div className="case-workspace-card">
-            <span>USGS 时序链路</span>
+            <span>气象时序链路</span>
             <strong>{dataStatus}</strong>
             <p>{usgsLiveSeriesCount.toLocaleString('zh-CN')} 条观测样本 · {realDataStatus ? dayjs(realDataStatus.checked_at).format('HH:mm:ss') : '检查中'}</p>
           </div>
           <div className="case-workspace-card">
             <span>案例对象</span>
             <strong>{caseStations.length} 站点 · {caseKeyPoints.length} 对象</strong>
-            <p>坝体、库区、Feather River 河道、监测站与关键影响对象分离展示。</p>
+            <p>坝体、库区、桑干河河道、监测站与关键影响对象分离展示。</p>
           </div>
         </div>
 

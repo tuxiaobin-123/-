@@ -2,14 +2,15 @@ import React from 'react'
 import { ConfigProvider } from 'antd'
 import { CaseDataPage } from './pages/CaseDataPage'
 import { MainPage } from './pages/MainPage'
+import { PINNPage } from './pages/PINNPage'
 import './App.css'
 
-/**
- * 根组件 - 应用入口
- * 配置全局深色主题和样式
- */
 const App: React.FC = () => {
-  const isCaseDataPage = window.location.pathname === '/case-data' || new URLSearchParams(window.location.search).get('page') === 'case-data'
+  const path = window.location.pathname
+  const query = new URLSearchParams(window.location.search).get('page')
+
+  const isCaseDataPage = path === '/case-data' || query === 'case-data'
+  const isPINNPage = path === '/pinn' || query === 'pinn'
 
   return (
     <ConfigProvider
@@ -39,7 +40,7 @@ const App: React.FC = () => {
         }
       }}
     >
-      {isCaseDataPage ? <CaseDataPage /> : <MainPage />}
+      {isCaseDataPage ? <CaseDataPage /> : isPINNPage ? <PINNPage /> : <MainPage />}
     </ConfigProvider>
   )
 }

@@ -2429,3 +2429,187 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   移动端指挥官视图（≤480px）
+   目标：手机竖屏下核心指标 + 避险路径清晰可用
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  /* 隐藏非关键面板，只保留核心信息 */
+  .screen-left-rail,
+  .screen-right-rail {
+    display: none;
+  }
+
+  /* 单列全宽布局 */
+  .screen-body,
+  .screen-cols {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 0 10px;
+  }
+
+  /* 地图全宽，高度适中 */
+  .map-shell,
+  .flood-map-wrap {
+    min-height: 320px;
+    max-height: 45vh;
+    border-radius: 12px;
+  }
+
+  /* 顶部6指标仪表盘：2列紧凑 */
+  .dashboard-grid,
+  .metric-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .metric-card {
+    padding: 10px 12px;
+    border-radius: 10px;
+  }
+
+  .metric-value {
+    font-size: 1.4rem;
+  }
+
+  .metric-label {
+    font-size: 0.72rem;
+  }
+
+  /* 风险等级卡片 */
+  .risk-level-badge {
+    font-size: 1.1rem;
+    padding: 8px 16px;
+  }
+
+  /* 避险路径：全宽卡片 */
+  .evacuation-route-list {
+    gap: 10px;
+  }
+
+  .route-card {
+    padding: 12px;
+    border-radius: 10px;
+  }
+
+  .route-name {
+    font-size: 0.9rem;
+    font-weight: 700;
+  }
+
+  .route-distance,
+  .route-time {
+    font-size: 0.8rem;
+  }
+
+  /* 导航栏精简 */
+  .nav-tabs {
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .nav-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-tab {
+    font-size: 0.78rem;
+    padding: 6px 12px;
+  }
+
+  /* 传感器站列表：水平滚动 */
+  .sensor-station-list {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 8px;
+    padding-bottom: 6px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sensor-station-card {
+    min-width: 140px;
+    flex-shrink: 0;
+    padding: 10px;
+  }
+
+  /* 顶部品牌栏精简 */
+  .brand-subtitle {
+    display: none;
+  }
+
+  .brand-title {
+    font-size: 15px;
+  }
+
+  .screen-header {
+    height: 56px;
+    padding: 8px 14px;
+  }
+
+  /* 溃坝预警 Banner（高优先级红色提示） */
+  .breach-alert-banner {
+    background: rgba(255, 50, 50, 0.15);
+    border: 1px solid rgba(255, 80, 80, 0.5);
+    border-radius: 10px;
+    padding: 12px 16px;
+    color: #ff8080;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-align: center;
+    animation: pulse-red 2s infinite;
+    margin-bottom: 8px;
+  }
+
+  @keyframes pulse-red {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 80, 80, 0.3); }
+    50%       { box-shadow: 0 0 0 8px rgba(255, 80, 80, 0); }
+  }
+
+  /* 底部快捷操作栏（Dock） */
+  .mobile-dock {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(7, 17, 28, 0.96);
+    border-top: 1px solid rgba(0, 212, 255, 0.15);
+    display: flex;
+    justify-content: space-around;
+    padding: 10px 0 max(10px, env(safe-area-inset-bottom));
+    z-index: 1000;
+    backdrop-filter: blur(12px);
+  }
+
+  .mobile-dock-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    color: #4a7090;
+    font-size: 0.68rem;
+    cursor: pointer;
+    padding: 4px 12px;
+    border-radius: 8px;
+    transition: color 0.2s;
+  }
+
+  .mobile-dock-btn.active,
+  .mobile-dock-btn:active {
+    color: #00d4ff;
+  }
+
+  .mobile-dock-icon {
+    font-size: 1.2rem;
+  }
+
+  /* 内容区底部留出Dock空间 */
+  .screen-body {
+    padding-bottom: 72px;
+  }
+}

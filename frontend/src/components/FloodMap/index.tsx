@@ -131,10 +131,10 @@ const BRANCH_RIVERS: [number, number][][] = [
 ]
 
 const STAGE_LABELS = [
-  { name: 'Lake Oroville 库区', lat: 39.565, lng: -121.455 },
-  { name: 'Oroville Dam 坝轴', lat: 39.538, lng: -121.486 },
-  { name: 'Feather River 下游断面', lat: 39.515, lng: -121.552 },
-  { name: 'Thermalito Afterbay 调蓄区', lat: 39.458, lng: -121.638 }
+  { name: '怀仁水库 库区', lat: 39.895, lng: 113.265 },
+  { name: '桑干河怀仁段 坝轴', lat: 39.870, lng: 113.280 },
+  { name: '桑干河下游断面', lat: 39.845, lng: 113.310 },
+  { name: '马鞍山高地避险区', lat: 39.830, lng: 113.340 }
 ]
 
 const RISK_COPY: Record<FloodGridPoint['risk_level'], { label: string; color: string; className: string }> = {

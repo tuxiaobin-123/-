@@ -1,0 +1,287 @@
+.pinn-page {
+  min-height: 100vh;
+  background: #0a1628;
+  color: #e0e0e0;
+  padding: 32px 24px 64px;
+  max-width: 1100px;
+  margin: 0 auto;
+  font-family: 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* Header */
+.pinn-header {
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+.pinn-badge {
+  display: inline-block;
+  background: rgba(0, 212, 255, 0.12);
+  border: 1px solid rgba(0, 212, 255, 0.35);
+  color: #00d4ff;
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 4px 14px;
+  border-radius: 20px;
+  margin-bottom: 16px;
+}
+
+.pinn-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 8px;
+  letter-spacing: 1px;
+}
+
+.pinn-subtitle {
+  font-size: 1.1rem;
+  color: #00d4ff;
+  font-weight: 400;
+  margin: 0 0 20px;
+}
+
+.pinn-intro {
+  font-size: 0.95rem;
+  color: #b0c4d8;
+  line-height: 1.8;
+  max-width: 780px;
+  margin: 0 auto;
+}
+
+/* Section */
+.pinn-section {
+  margin-bottom: 44px;
+}
+
+.pinn-section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #00d4ff;
+  letter-spacing: 1px;
+  border-left: 3px solid #00d4ff;
+  padding-left: 12px;
+  margin: 0 0 20px;
+}
+
+/* Formula Cards */
+.formula-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.formula-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 18px 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-left: 3px solid var(--accent, #00d4ff);
+}
+
+.formula-card:hover,
+.formula-card.is-active {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--accent, #00d4ff);
+  box-shadow: 0 0 16px rgba(0, 212, 255, 0.1);
+}
+
+.formula-title {
+  font-size: 0.85rem;
+  color: #90aec8;
+  margin-bottom: 10px;
+}
+
+.formula-latex {
+  font-family: 'Courier New', monospace;
+  font-size: 1rem;
+  color: var(--accent, #00d4ff);
+  font-weight: 600;
+  margin-bottom: 8px;
+  word-break: break-all;
+}
+
+.formula-detail {
+  font-size: 0.85rem;
+  color: #b0c4d8;
+  line-height: 1.7;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  animation: fadeIn 0.2s ease;
+}
+
+.formula-hint {
+  font-size: 0.75rem;
+  color: #4a6080;
+  margin-top: 6px;
+}
+
+/* Pipeline */
+.pipeline {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.pipeline-step {
+  flex: 1;
+  min-width: 150px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 16px 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pipeline-step:hover,
+.pipeline-step.is-active {
+  background: rgba(0, 212, 255, 0.08);
+  border-color: rgba(0, 212, 255, 0.4);
+}
+
+.step-icon {
+  font-size: 1.5rem;
+  margin-bottom: 6px;
+}
+
+.step-num {
+  font-size: 0.72rem;
+  color: #4a7090;
+  letter-spacing: 1px;
+}
+
+.step-title {
+  font-size: 0.85rem;
+  color: #e0e0e0;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.step-detail {
+  font-size: 0.78rem;
+  color: #90aec8;
+  line-height: 1.6;
+  margin-top: 10px;
+  text-align: left;
+  animation: fadeIn 0.2s ease;
+}
+
+.pipeline-arrow {
+  align-self: center;
+  color: #00d4ff;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  padding-top: 4px;
+}
+
+/* Comparison Table */
+.pinn-comparison {
+  margin-bottom: 44px;
+}
+
+.pinn-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.pinn-table th {
+  background: rgba(0, 212, 255, 0.1);
+  color: #00d4ff;
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+  font-weight: 600;
+}
+
+.pinn-table td {
+  padding: 9px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: #c0d8e8;
+}
+
+.pinn-table tr:hover td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.cell-good  { color: #00ff88 !important; font-weight: 600; }
+.cell-warn  { color: #ffa500 !important; }
+.cell-bad   { color: #ff6673 !important; }
+
+/* Roadmap */
+.roadmap-items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.roadmap-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.roadmap-item.done { border-color: rgba(0, 255, 136, 0.2); }
+.roadmap-item.current { border-color: rgba(0, 212, 255, 0.3); }
+.roadmap-item.future { opacity: 0.65; }
+
+.roadmap-tag {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  background: rgba(0, 255, 136, 0.15);
+  color: #00ff88;
+}
+
+.roadmap-tag.current {
+  background: rgba(0, 212, 255, 0.15);
+  color: #00d4ff;
+}
+
+.roadmap-tag.future {
+  background: rgba(160, 160, 160, 0.12);
+  color: #8090a0;
+}
+
+/* Footer */
+.pinn-footer {
+  text-align: center;
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pinn-ref {
+  font-size: 0.78rem;
+  color: #4a6080;
+  line-height: 1.8;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .formula-grid { grid-template-columns: 1fr; }
+  .pipeline { flex-direction: column; }
+  .pipeline-arrow { transform: rotate(90deg); align-self: center; }
+  .pinn-title { font-size: 1.4rem; }
+}

@@ -65,7 +65,7 @@ export const CaseDataPage: React.FC = () => {
     return (
       <div className="case-page-loading">
         <Spin size="large" />
-        <span>正在加载 Oroville Dam 案例数据...</span>
+        <span>正在加载桑干河怀仁段案例数据...</span>
       </div>
     )
   }
@@ -77,14 +77,14 @@ export const CaseDataPage: React.FC = () => {
           返回主大屏
         </button>
         <div>
-          <span>OROVILLE DAM CASE CENTER</span>
-          <h1>{caseProfile?.dam.name || 'Oroville Dam / Lake Oroville'}</h1>
+          <span>SANGGAN RIVER CASE CENTER</span>
+          <h1>{caseProfile?.dam.name || '桑干河怀仁段水利枢纽'}</h1>
           <p>
-            {caseProfile?.dam.river || 'Feather River'} · {formatCoordinate(caseProfile?.dam.lat)}, {formatCoordinate(caseProfile?.dam.lng)}
+            {caseProfile?.dam.river || '桑干河'} · {formatCoordinate(caseProfile?.dam.lat)}, {formatCoordinate(caseProfile?.dam.lng)}
           </p>
         </div>
         <button type="button" className="case-primary-action" onClick={handleStartReplay} disabled={startingReplay}>
-          {startingReplay ? '正在启动回放...' : '运行 2017 历史回放'}
+          {startingReplay ? '正在启动回放...' : '运行 1996 桑干河历史回放'}
         </button>
       </header>
 

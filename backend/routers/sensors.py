@@ -122,25 +122,25 @@ def _sample_model_sensor_reading(station_id: str, request: Request) -> SensorRea
     if flood_module is not None:
         request_rainfall = float(getattr(flood_module, "rainfall_rate", 0.0))
 
-    # Give the real stations different hydraulic sensitivities: reservoir pool,
-    # powerhouse release, downstream Feather River gage, and afterbay storage.
+    # 桑干河各站水力特性偏差（上游来流多、支流汇入、市区段、下游出境）
     station_bias = {
-        "usgs_11406800": {"level": 0.35, "flow": 0.06, "rain": 0.92},
-        "usgs_11406818": {"level": -0.4, "flow": 0.32, "rain": 1.0},
-        "usgs_11407000": {"level": -0.22, "flow": 0.26, "rain": 0.88},
-        "usgs_11406870": {"level": 0.06, "flow": 0.2, "rain": 1.22},
+        "sgr_upstream":        {"level": 0.30, "flow": 0.08, "rain": 0.85},
+        "sgr_huairen_main":    {"level": 0.05, "flow": 0.18, "rain": 1.0},
+        "sgr_south_tributary": {"level": -0.20, "flow": 0.35, "rain": 1.15},
+        "sgr_downstream":      {"level": -0.40, "flow": 0.22, "rain": 0.90},
     }.get(station_id, {"level": 0.0, "flow": 0.0, "rain": 1.0})
 
     water_level = max(0.0, water_level + station_bias["level"])
     flow_rate = max(0.0, flow_rate + station_bias["flow"])
     rainfall = max(0.0, request_rainfall * station_bias["rain"])
 
+    # 桑干河各站合理水位范围（m，绝对高程）
     level_limits = {
-        "usgs_11406800": (245.0, 286.0),
-        "usgs_11406818": (90.0, 142.0),
-        "usgs_11407000": (35.0, 72.0),
-        "usgs_11406870": (30.0, 58.0),
-    }.get(station_id, (0.0, 120.0))
+        "sgr_upstream":        (1045.0, 1075.0),
+        "sgr_huairen_main":    (1030.0, 1060.0),
+        "sgr_south_tributary": (1022.0, 1048.0),
+        "sgr_downstream":      (1008.0, 1030.0),
+    }.get(station_id, (1010.0, 1070.0))
 
     if not np.isfinite(water_level):
         water_level = level_limits[0]
@@ -169,13 +169,14 @@ def _sample_model_sensor_reading(station_id: str, request: Request) -> SensorRea
 
 def _generate_fallback_sensor_reading(station_id: str) -> SensorReading:
     station_info = SENSOR_STATIONS[station_id]
+    # 桑干河各站正常水位（绝对高程，m）
     base_levels = {
-        "usgs_11406800": 266.0,
-        "usgs_11406818": 112.0,
-        "usgs_11407000": 49.5,
-        "usgs_11406870": 40.5,
+        "sgr_upstream":        1058.0,
+        "sgr_huairen_main":    1042.0,
+        "sgr_south_tributary": 1033.0,
+        "sgr_downstream":      1016.0,
     }
-    base_level = base_levels.get(station_id, 50.0)
+    base_level = base_levels.get(station_id, 1035.0)
     now = datetime.now()
     hours_since_midnight = now.hour + now.minute / 60.0
     trend = np.sin(hours_since_midnight / 6.0) * 0.8
@@ -269,17 +270,17 @@ async def get_station_history(station_id: str, request: Request, hours: int = 48
         ]
     else:
         base_level = {
-            "usgs_11406800": 266.0,
-            "usgs_11406818": 112.0,
-            "usgs_11407000": 49.5,
-            "usgs_11406870": 40.5,
-        }.get(station_id, 50.0)
+            "sgr_upstream":        1058.0,
+            "sgr_huairen_main":    1042.0,
+            "sgr_south_tributary": 1033.0,
+            "sgr_downstream":      1016.0,
+        }.get(station_id, 1035.0)
 
         for i in range(hours):
             timestamp = now - timedelta(hours=hours - i - 1)
             hours_since_midnight = timestamp.hour + timestamp.minute / 60.0
             trend = np.sin(hours_since_midnight / 6.0) * 0.8
-            water_level = float(np.clip(base_level + trend + np.random.normal(0, 0.1), 0, 15))
+            water_level = float(np.clip(base_level + trend + np.random.normal(0, 0.15), base_level - 5, base_level + 8))
             rainfall = float(np.random.exponential(20) if np.random.rand() > 0.75 else 0)
             flow_rate = float(np.clip(0.8 + water_level * 0.06 + np.random.normal(0, 0.05), 0, 8))
             battery = float(np.clip(95 - (i / hours * 10) + np.random.normal(0, 1), 20, 100))

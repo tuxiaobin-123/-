@@ -352,7 +352,7 @@ def generate_synthetic_history(station_id: str, hours: int = 24) -> List[History
     for i in range(hours):
         trend = np.sin(i / 6.0) * 0.5
         noise = np.random.normal(0, 0.2)
-        water_level = float(np.clip(base_water_level + trend + noise, 0, 15))
+        water_level = float(np.clip(base_water_level + trend + noise, base_water_level - 5.0, base_water_level + 5.0))
         rainfall = float(np.random.exponential(20) if np.random.rand() > 0.6 else 0)
         flow_rate = float(np.clip(50 + trend * 20 + np.random.normal(0, 5), 0, 200))
 

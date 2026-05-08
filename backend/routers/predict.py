@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from config import BASE_LAT, BASE_LNG, DAM_CONFIG, GRID_DX, GRID_DY, SENSOR_STATIONS
 from routers import flood
+from services.weather import get_rainfall_forecast
 
 router = APIRouter(prefix="/api/predict", tags=["predict"])
 
@@ -207,13 +208,23 @@ def _risk_description(risk_level: str) -> str:
 
 
 @router.get("/flood", response_model=FloodPredictionResponse)
-async def get_flood_prediction(request: Request, station_id: str = "urban_a", hours: int = 24) -> FloodPredictionResponse:
+async def get_flood_prediction(request: Request, station_id: str = "sgr_huairen_main", hours: int = 24) -> FloodPredictionResponse:
     if station_id not in SENSOR_STATIONS:
         raise HTTPException(status_code=400, detail=f"Invalid station_id. Must be one of {list(SENSOR_STATIONS)}")
     if hours < 1 or hours > 24:
         raise HTTPException(status_code=400, detail="Hours must be between 1 and 24")
 
-    prediction = _predict_levels(station_id=station_id, request=request, hours=hours)
+    # 优先使用和风天气真实降雨预报
+    weather = await get_rainfall_forecast(hours=hours)
+    real_rainfall = np.array(weather["forecast"], dtype=float)
+    rainfall_override = real_rainfall if len(real_rainfall) == hours else None
+
+    prediction = _predict_levels(
+        station_id=station_id,
+        request=request,
+        hours=hours,
+        rainfall_override=rainfall_override,
+    )
     points = [
         PredictionPoint(
             timestamp=prediction["timestamps"][index],
@@ -234,10 +245,19 @@ async def get_flood_prediction(request: Request, station_id: str = "urban_a", ho
             "max_prediction": prediction["max_prediction"],
             "min_prediction": prediction["min_prediction"],
             "risk_trend": prediction["risk_trend"],
+            "rainfall_source": weather["source"],     # "qweather" 或 "simulated"
+            "rainfall_total_mm": weather["total_mm"],
+            "rainfall_peak_mm": weather["peak_mm"],
             "source": "dam_state_and_station_history",
         },
         generated_at=datetime.now().isoformat(),
     )
+
+
+@router.get("/weather", summary="获取桑干河流域实时降雨预报")
+async def get_weather_forecast():
+    """返回和风天气降雨预报（或统计模拟后备），供前端展示数据来源。"""
+    return await get_rainfall_forecast(hours=24)
 
 
 @router.get("/risk-trend", response_model=RiskTrendResponse)
@@ -296,7 +316,7 @@ async def predict_scenario(request_data: ScenarioPredictionRequest, request: Req
         rainfall_series = rainfall_series + np.linspace(30.0, 8.0, num=hours)
 
     prediction = _predict_levels(
-        station_id="downstream",
+        station_id="sgr_downstream",
         request=request,
         hours=hours,
         rainfall_override=rainfall_series,
@@ -314,15 +334,15 @@ async def predict_scenario(request_data: ScenarioPredictionRequest, request: Req
         for index in range(hours)
     ]
     max_level = float(max(prediction["predicted_levels"], default=0.0))
-
-    if max_level < 20.0:
+    # 桑干河怀仁段水位阈值
+    if max_level < 1022.0:
         recommendation = "维持巡检，继续观察坝区和下游断面。"
-    elif max_level < 30.0:
+    elif max_level < 1035.0:
         recommendation = "启动预警值守，准备重点点位转移。"
-    elif max_level < 38.0:
-        recommendation = "建议提前执行下游重点区域人员转移和交通管制。"
+    elif max_level < 1050.0:
+        recommendation = "建议提前执行下游怀仁市区和桑干河大桥区域人员转移和交通管制。"
     else:
-        recommendation = "立即执行最高级应急响应，优先保护下游关键点位。"
+        recommendation = "立即执行最高级应急响应，优先保护怀仁人民医院、学校等关键点位。"
 
     return ScenarioPredictionResponse(
         scenario_type=request_data.scenario_type,
@@ -366,5 +386,111 @@ async def get_ensemble_prediction(request: Request, station_id: str = "urban_a",
         "prediction_type": "simulation_ensemble",
         "forecast_hours": hours,
         "points": points,
+        "generated_at": datetime.now().isoformat(),
+    }
+
+
+@router.get("/breach", summary="溃坝情景模拟 — 级联风险推演")
+async def simulate_dam_breach(
+    request: Request,
+    breach_width_m: float = 50.0,
+    reservoir_level_m: float = 1055.0,
+    hours: int = 12,
+) -> Dict:
+    """
+    桑干河怀仁段水库溃坝情景专项推演。
+
+    基于简化物理模型：
+      1. 溃口流量 Q(t) = Cd × B × sqrt(2g) × H(t)^1.5（堰流公式）
+      2. 洪峰传播：Muskingum 线性演算（K=2h, X=0.3）
+      3. 下游水位响应：Manning 公式反算
+
+    参数：
+      breach_width_m:    溃口宽度（m），默认 50m（部分溃坝）
+      reservoir_level_m: 溃坝时库水位（m），默认 1055m（接近校核洪水位）
+      hours:             推演时长（1-24 h）
+    """
+    hours = max(1, min(hours, 24))
+    g = 9.81
+    Cd = 0.61
+    B = min(max(breach_width_m, 10.0), 300.0)
+
+    dam_crest = float(DAM_CONFIG["crest_elevation_m"])
+    downstream_base = float(DAM_CONFIG["downstream_control_level_m"])
+
+    timestamps = [(datetime.now() + timedelta(hours=h)).isoformat() for h in range(1, hours + 1)]
+    t_arr = np.arange(1, hours + 1, dtype=float)
+
+    H0 = max(reservoir_level_m - (dam_crest - 20.0), 0.1)
+    drain_rate = 0.25
+    H_t = H0 * np.exp(-drain_rate * t_arr)
+    Q_t = Cd * B * np.sqrt(2 * g) * np.maximum(H_t, 0) ** 1.5
+
+    # Muskingum 洪峰演算
+    K, X_mk = 2.0, 0.3
+    dt = 1.0
+    C0 = (dt - 2 * K * X_mk) / (2 * K * (1 - X_mk) + dt)
+    C1 = (dt + 2 * K * X_mk) / (2 * K * (1 - X_mk) + dt)
+    C2 = (2 * K * (1 - X_mk) - dt) / (2 * K * (1 - X_mk) + dt)
+
+    Q_routed = np.zeros(hours)
+    Q_routed[0] = Q_t[0]
+    for i in range(1, hours):
+        Q_routed[i] = C0 * Q_t[i] + C1 * Q_t[i - 1] + C2 * Q_routed[i - 1]
+
+    B_river, n_mann, S0 = 120.0, 0.04, 0.0005
+    def q_to_depth(Q: float) -> float:
+        if Q <= 0:
+            return 0.0
+        return (Q * n_mann / (B_river * S0 ** 0.5)) ** 0.6
+
+    depth_t = np.array([q_to_depth(q) for q in Q_routed])
+    wl_t = downstream_base + depth_t
+
+    def level_to_risk(wl: float) -> str:
+        if wl < 1022: return "low"
+        if wl < 1032: return "medium"
+        if wl < 1045: return "high"
+        return "critical"
+
+    points = [
+        {
+            "hour": int(t_arr[i]),
+            "timestamp": timestamps[i],
+            "breach_discharge_m3s": round(float(Q_t[i]), 1),
+            "routed_discharge_m3s": round(float(Q_routed[i]), 1),
+            "downstream_depth_m": round(float(depth_t[i]), 2),
+            "downstream_level_m": round(float(wl_t[i]), 2),
+            "risk_level": level_to_risk(float(wl_t[i])),
+        }
+        for i in range(hours)
+    ]
+
+    peak_q = float(np.max(Q_t))
+    peak_wl = float(np.max(wl_t))
+    t_peak = int(np.argmax(Q_t)) + 1
+
+    cascade_events = []
+    if peak_wl >= 1022:
+        cascade_events.append({"hour": t_peak, "event": "桑干河大桥漫水，S322省道中断"})
+    if peak_wl >= 1032:
+        cascade_events.append({"hour": t_peak + 1, "event": "怀仁市区低洼地带进水，安置区启动"})
+    if peak_wl >= 1045:
+        cascade_events.append({"hour": t_peak + 2, "event": "怀仁人民医院受威胁，触发最高响应"})
+
+    return {
+        "scenario": "dam_breach",
+        "breach_width_m": B,
+        "initial_reservoir_level_m": reservoir_level_m,
+        "peak_discharge_m3s": round(peak_q, 1),
+        "peak_downstream_level_m": round(peak_wl, 2),
+        "time_to_peak_hours": t_peak,
+        "cascade_events": cascade_events,
+        "points": points,
+        "recommendation": (
+            "立即启动溃坝应急预案，疏散桑干河两岸怀仁市区全部居民，封闭S322省道，通知山阴县做好下游接收准备。"
+            if peak_wl >= 1032 else
+            "下游河滩地及低洼村庄立即预警，桑干河大桥实施交通管制。"
+        ),
         "generated_at": datetime.now().isoformat(),
     }

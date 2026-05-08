@@ -50,6 +50,14 @@ class SWEModel:
         if self.dam_config.get("case_id") == "oroville_dam":
             return self._init_oroville_dem()
 
+        # Try to load from pre-generated DEM grid (e.g. Sanggan River)
+        cache_path = self.dam_config.get("dem_grid_path")
+        if cache_path:
+            cached_dem = load_dem_grid_cache(cache_path, self.rows, self.cols)
+            if cached_dem is not None:
+                self.raw_dem = cached_dem.copy()
+                return self._apply_sanggan_hydraulic_features(cached_dem)
+
         dem = np.zeros((self.rows, self.cols), dtype=np.float32)
         dam_row = self._dam_row()
         gate_slice = self._gate_slice()
@@ -165,6 +173,33 @@ class SWEModel:
         dem[dam_body_start:dam_body_end, gate_slice] = min(crest - 22.0, float(np.mean(dem[dam_body_start:dam_body_end, gate_slice]) + 4.0))
 
         return np.clip(dem, 28.0, 620.0).astype(np.float32)
+
+    def _apply_sanggan_hydraulic_features(self, source_dem: np.ndarray) -> np.ndarray:
+        """Impose dam crest and river channel constraints on the Sanggan River DEM."""
+        dem = source_dem.astype(np.float32).copy()
+        dam_row = self._dam_row()
+        gate_slice = self._gate_slice()
+        crest = float(self.dam_config.get("crest_elevation_m", 1068.0))
+
+        # Carve the main Sanggan River channel downstream of the dam
+        river_center = self.cols // 2
+        for row in range(dam_row, self.rows):
+            for col in range(self.cols):
+                dist = abs(col - river_center)
+                if dist <= 2:
+                    dem[row, col] -= (2.0 - dist) * 4.0
+                elif dist <= 5:
+                    dem[row, col] -= (5.0 - dist) * 0.8
+
+        # Enforce dam crest
+        dam_body_start = max(0, dam_row - 1)
+        dam_body_end = min(self.rows, dam_row + 1)
+        dem[dam_body_start:dam_body_end, :] = np.maximum(
+            dem[dam_body_start:dam_body_end, :], crest
+        )
+        dem[dam_body_start:dam_body_end, gate_slice] = crest - 8.0
+
+        return np.clip(dem, 990.0, 1340.0).astype(np.float32)
 
     def _init_water(self) -> None:
         dam_row = self._dam_row()

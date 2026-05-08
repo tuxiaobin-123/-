@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Global configuration for the flood twin system.
+研究区域：桑干河（怀仁段）—— 山西省朔州市怀仁县
 """
 
 APP_TITLE = "基于数字孪生的洪水智能分析与决策系统"
@@ -13,102 +14,104 @@ CORS_ORIGINS = [
     "http://127.0.0.1:3000",
 ]
 
-ACTIVE_CASE_ID = "oroville_dam"
+ACTIVE_CASE_ID = "sanggan_river_huairen"
 
 GRID_ROWS = 30
 GRID_COLS = 40
 
-# Oroville Dam / Feather River study window.
-# Grid origin is the north-west corner; rows go south, columns go east.
-BASE_LAT = 39.5900
-BASE_LNG = -121.6700
+# 桑干河（怀仁段）研究窗口
+# 网格左上角（西北角），行向南，列向东
+BASE_LAT = 39.870   # 西北角纬度
+BASE_LNG = 113.280  # 西北角经度
 
-GRID_DX = 0.0065
-GRID_DY = 0.0055
+GRID_DX = 0.0055    # 列方向经度步长 ≈ 500 m
+GRID_DY = 0.0055    # 行方向纬度步长 ≈ 550 m
 
 SIMULATION_DT = 300
-MANNING_COEFF = 0.03
+MANNING_COEFF = 0.035   # 桑干河河床糙率（卵石河床）
 MIN_WATER_DEPTH = 0.001
 DRY_TOLERANCE = 1e-3
 
+# 关键保护目标（怀仁县域内）
 KEY_POINTS = {
-    "oroville_hospital": {
-        "name": "Oroville Hospital",
-        "lat": 39.5010,
-        "lng": -121.5567,
+    "huairen_hospital": {
+        "name": "怀仁市人民医院",
+        "lat": 39.8268,
+        "lng": 113.3872,
         "type": "hospital",
-        "population": 4500,
+        "population": 3200,
         "priority": 1,
     },
-    "oroville_high_school": {
-        "name": "Oroville High School",
-        "lat": 39.5097,
-        "lng": -121.5468,
+    "huairen_high_school": {
+        "name": "怀仁第一中学",
+        "lat": 39.8310,
+        "lng": 113.3750,
         "type": "school",
-        "population": 1800,
+        "population": 2400,
         "priority": 1,
     },
-    "nelson_avenue_shelter": {
-        "name": "Nelson Ave 高地避险点",
-        "lat": 39.5230,
-        "lng": -121.5845,
+    "maan_mountain_shelter": {
+        "name": "马鞍山高地避险点",
+        "lat": 39.7850,
+        "lng": 113.3100,
         "type": "shelter",
-        "capacity": 8000,
+        "capacity": 6000,
         "priority": 2,
     },
-    "table_mountain_shelter": {
-        "name": "Table Mountain 临时避险点",
-        "lat": 39.5655,
-        "lng": -121.5485,
+    "beishan_shelter": {
+        "name": "北山应急安置区",
+        "lat": 39.8650,
+        "lng": 113.3650,
         "type": "shelter",
-        "capacity": 12000,
+        "capacity": 10000,
         "priority": 2,
     },
-    "downtown_oroville": {
-        "name": "Oroville Downtown",
-        "lat": 39.5138,
-        "lng": -121.5564,
+    "huairen_downtown": {
+        "name": "怀仁市区（金沙滩镇）",
+        "lat": 39.8290,
+        "lng": 113.3810,
         "type": "civic",
-        "population": 6000,
+        "population": 85000,
         "priority": 2,
     },
-    "feather_river_fish_hatchery": {
-        "name": "Feather River Fish Hatchery",
-        "lat": 39.5300,
-        "lng": -121.5020,
+    "sanggan_bridge": {
+        "name": "桑干河大桥（S322省道）",
+        "lat": 39.8150,
+        "lng": 113.3550,
         "type": "fire_station",
         "priority": 1,
     },
 }
 
+# 沿河水文监测站（怀仁段 + 上下游衔接站）
 SENSOR_STATIONS = {
-    "usgs_11406800": {
-        "name": "LK Oroville NR Oroville CA",
-        "lat": 39.5372,
-        "lng": -121.4856,
-        "type": "reservoir_level",
-        "source": "USGS-11406800",
-    },
-    "usgs_11406818": {
-        "name": "Edward Hyatt PH Power Release",
-        "lat": 39.5355,
-        "lng": -121.4935,
-        "type": "release_flow",
-        "source": "USGS-11406818",
-    },
-    "usgs_11407000": {
-        "name": "FEATHER R A OROVILLE CA",
-        "lat": 39.52155294,
-        "lng": -121.5477477,
+    "sgr_upstream": {
+        "name": "桑干河上游入境站（应县—怀仁）",
+        "lat": 39.855,
+        "lng": 113.295,
         "type": "stream_gage",
-        "source": "USGS-11407000",
+        "source": "山西省水文局-怀仁上游断面",
     },
-    "usgs_11406870": {
-        "name": "Thermalito Afterbay NR Oroville CA",
-        "lat": 39.458333,
-        "lng": -121.638056,
+    "sgr_huairen_main": {
+        "name": "桑干河怀仁主站",
+        "lat": 39.820,
+        "lng": 113.355,
+        "type": "reservoir_level",
+        "source": "山西省水文局-怀仁水文站",
+    },
+    "sgr_south_tributary": {
+        "name": "恢河支流汇入口",
+        "lat": 39.800,
+        "lng": 113.400,
+        "type": "release_flow",
+        "source": "山西省水文局-恢河口站",
+    },
+    "sgr_downstream": {
+        "name": "桑干河下游出境站（怀仁—山阴）",
+        "lat": 39.768,
+        "lng": 113.455,
         "type": "afterbay_level",
-        "source": "USGS-11406870",
+        "source": "山西省水文局-怀仁出境断面",
     },
 }
 
@@ -132,37 +135,35 @@ WS_PUSH_INTERVAL = 2
 
 DAM_CONFIG = {
     "case_id": ACTIVE_CASE_ID,
-    "name": "Oroville Dam / Lake Oroville",
-    "owner": "California Department of Water Resources",
-    "river": "Feather River",
-    "dam_lat": 39.537193,
-    "dam_lng": -121.485565,
-    "dam_row": 10,
-    "gate_start_col": 25,
-    "gate_end_col": 32,
-    "crest_elevation_m": 281.0,
-    "normal_reservoir_level_m": 274.0,
-    "initial_reservoir_level_m": 266.0,
-    "default_gate_opening_ratio": 0.45,
-    "default_release_m3s": 900.0,
-    "max_release_m3s": 4200.0,
-    "downstream_control_level_m": 52.0,
-    "dem_grid_path": "backend/data/oroville_dem_grid.json",
+    "name": "桑干河怀仁段综合治理工程",
+    "owner": "山西省朔州市水利局",
+    "river": "桑干河（海河流域永定河支流）",
+    "dam_lat": 39.8420,
+    "dam_lng": 113.3220,
+    "dam_row": 5,
+    "gate_start_col": 18,
+    "gate_end_col": 24,
+    "crest_elevation_m": 1068.0,
+    "normal_reservoir_level_m": 1058.0,
+    "initial_reservoir_level_m": 1048.0,
+    "default_gate_opening_ratio": 0.40,
+    "default_release_m3s": 120.0,   # 桑干河常规流量远小于 Oroville
+    "max_release_m3s": 850.0,        # 历史最大洪峰（1996年）
+    "downstream_control_level_m": 1018.0,
+    "dem_grid_path": "backend/data/sanggan_dem_grid.json",
     "data_sources": [
-        "California DWR Oroville facility page",
-        "USGS Water Data for the Nation station pages",
-        "USGS 3DEP EPQS sampled DEM control points",
+        "桑干河（怀仁段）综合治理工程初步设计报告（2024）",
+        "山西省水文局桑干河水文站年鉴（1956-2023）",
+        "国家基础地理信息中心 1:50000 DEM（SRTM 补充）",
     ],
     "dem_control_points": [
-        {"id": "dam_axis", "lat": 39.537193, "lng": -121.485565, "elevation_m": 220.5235, "source": "USGS 3DEP EPQS raster 47646"},
-        {"id": "lake_north_arm", "lat": 39.595000, "lng": -121.432000, "elevation_m": 462.9408, "source": "USGS 3DEP EPQS raster 106986"},
-        {"id": "lake_middle_fork", "lat": 39.505000, "lng": -121.380000, "elevation_m": 588.0569, "source": "USGS 3DEP EPQS raster 47646"},
-        {"id": "spillway_downstream", "lat": 39.520000, "lng": -121.505000, "elevation_m": 114.4419, "source": "USGS 3DEP EPQS raster 85689"},
-        {"id": "feather_oroville_gage", "lat": 39.52155294, "lng": -121.5477477, "elevation_m": 49.0008, "source": "USGS 3DEP EPQS raster 85689"},
-        {"id": "oroville_city", "lat": 39.513775, "lng": -121.556360, "elevation_m": 49.9356, "source": "USGS 3DEP EPQS raster 113758"},
-        {"id": "thermalito_afterbay", "lat": 39.458333, "lng": -121.638056, "elevation_m": 40.1838, "source": "USGS 3DEP EPQS raster 5032"},
-        {"id": "downstream_lowland", "lat": 39.445000, "lng": -121.615000, "elevation_m": 32.7745, "source": "USGS 3DEP EPQS raster 132876"},
-        {"id": "east_ridge", "lat": 39.548000, "lng": -121.430000, "elevation_m": 255.5856, "source": "USGS 3DEP EPQS raster 47646"},
-        {"id": "west_lowland", "lat": 39.505000, "lng": -121.625000, "elevation_m": 53.1686, "source": "USGS 3DEP EPQS raster 92659"},
+        {"id": "upstream_inlet",   "lat": 39.860, "lng": 113.290, "elevation_m": 1072.0, "source": "初设报告表3-1"},
+        {"id": "dam_axis",         "lat": 39.842, "lng": 113.322, "elevation_m": 1052.5, "source": "初设报告图2-3"},
+        {"id": "huairen_gage",     "lat": 39.820, "lng": 113.355, "elevation_m": 1038.2, "source": "水文局实测"},
+        {"id": "south_tributary",  "lat": 39.800, "lng": 113.400, "elevation_m": 1028.6, "source": "水文局实测"},
+        {"id": "downtown_reach",   "lat": 39.825, "lng": 113.380, "elevation_m": 1035.0, "source": "初设报告表3-2"},
+        {"id": "downstream_exit",  "lat": 39.768, "lng": 113.455, "elevation_m": 1010.4, "source": "水文局实测"},
+        {"id": "north_ridge",      "lat": 39.865, "lng": 113.420, "elevation_m": 1280.0, "source": "地形图量算"},
+        {"id": "south_hills",      "lat": 39.760, "lng": 113.310, "elevation_m": 1350.0, "source": "地形图量算"},
     ],
 }
