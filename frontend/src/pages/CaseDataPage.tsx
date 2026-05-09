@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Spin } from 'antd'
 import dayjs from 'dayjs'
-import { getActiveCase, getRealDataStatus, startHistoricalReplay } from '../api/client'
-import { CaseProfile, RealDataStatus } from '../types'
+import { getActiveCase, getModelCapabilities, getRealDataStatus, startHistoricalReplay } from '../api/client'
+import { CaseProfile, ModelCapabilities, RealDataStatus } from '../types'
 import './CaseDataPage.css'
 
 const DATA_STATUS_COPY = {
@@ -18,6 +18,7 @@ const formatNumber = (value?: number, fractionDigits = 0) =>
 
 export const CaseDataPage: React.FC = () => {
   const [caseProfile, setCaseProfile] = useState<CaseProfile | null>(null)
+  const [modelCapabilities, setModelCapabilities] = useState<ModelCapabilities | null>(null)
   const [realDataStatus, setRealDataStatus] = useState<RealDataStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -27,8 +28,9 @@ export const CaseDataPage: React.FC = () => {
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const [caseData, statusData] = await Promise.all([getActiveCase(), getRealDataStatus()])
+      const [caseData, capabilityData, statusData] = await Promise.all([getActiveCase(), getModelCapabilities(), getRealDataStatus()])
       setCaseProfile(caseData)
+      setModelCapabilities(capabilityData)
       setRealDataStatus(statusData)
       setError(null)
     } catch (err) {
@@ -48,6 +50,35 @@ export const CaseDataPage: React.FC = () => {
   const dataStatus = realDataStatus?.usgs.status || 'unavailable'
   const dataStatusCopy = DATA_STATUS_COPY[dataStatus]
   const usgsSampleCount = realDataStatus?.usgs.series.reduce((total, series) => total + series.count, 0) || 0
+  const innovationCards = useMemo(() => {
+    const points = modelCapabilities?.innovation_points
+    return [
+      {
+        key: 'physics-ai',
+        title: '物理模型 + AI 预测',
+        value: modelCapabilities ? 'SWE 水动力 + 预测链路' : 'Physics + AI',
+        detail: points?.physics_ai_fusion.evidence.length
+          ? '水动力模型输出水深、流速和水面线，预测接口继续给出未来风险趋势。'
+          : 'SWE 水动力结果与预测 API 联动。'
+      },
+      {
+        key: 'dam-boundary',
+        title: '大坝对象边界条件',
+        value: modelCapabilities ? '坝前-泄洪-下游水位' : 'Dam Boundary',
+        detail: points?.dam_boundary_conditions.evidence.length
+          ? '上游来水、库水位、闸门泄洪和下游控制水位都进入同一套推演参数。'
+          : '坝前水位、泄洪、下游控制水位进入模型。'
+      },
+      {
+        key: 'decision-loop',
+        title: '预警处置闭环',
+        value: modelCapabilities ? `${modelCapabilities.decision_loop.length} 环节闭环` : 'Decision Loop',
+        detail: points?.monitor_simulate_warn_respond_loop.evidence.length
+          ? '监测、推演、风险识别、避险路线和报告输出组成完整处置链。'
+          : '风险对象、避险路线和报告输出联动。'
+      }
+    ]
+  }, [modelCapabilities])
 
   const handleStartReplay = async () => {
     setStartingReplay(true)
@@ -117,6 +148,16 @@ export const CaseDataPage: React.FC = () => {
           <p>坝体、库区、河道、监测点、关键影响对象</p>
         </section>
       </main>
+
+      <section className="case-innovation-strip" aria-label="核心创新证据链">
+        {innovationCards.map((card) => (
+          <article key={card.key} className="case-innovation-card">
+            <span>{card.title}</span>
+            <strong>{card.value}</strong>
+            <p>{card.detail}</p>
+          </article>
+        ))}
+      </section>
 
       <section className="case-page-sections">
         <article className="case-page-panel">

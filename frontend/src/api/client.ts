@@ -3,6 +3,7 @@ import {
   CaseProfile,
   EvacuationRoute,
   FloodGridPoint,
+  ModelCapabilities,
   PredictionData,
   RealDataStatus,
   RiskZoneCollection,
@@ -215,6 +216,11 @@ export const getSimulationStatus = async (): Promise<SimulationStatus> => {
 
 export const getActiveCase = async (): Promise<CaseProfile> => {
   const response = await apiClient.get<CaseProfile>('/flood/case')
+  return response.data
+}
+
+export const getModelCapabilities = async (): Promise<ModelCapabilities> => {
+  const response = await apiClient.get<ModelCapabilities>('/flood/capabilities')
   return response.data
 }
 

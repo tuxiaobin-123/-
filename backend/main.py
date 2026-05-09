@@ -29,7 +29,7 @@ from config import (
     GRID_ROWS,
     WS_PUSH_INTERVAL,
 )
-from models.hydraulic import SWEModel
+from models.hydraulic import SWEModel, scalar_to_float
 from models.risk_assessment import RiskAssessor
 from routers import flood, historical, predict, report, risk, sensors
 
@@ -113,8 +113,11 @@ def _station_grid_index(station_lat: float, station_lng: float, model: SWEModel)
 def _sample_station_snapshot(station_id: str, model: SWEModel) -> dict:
     station_info = sensors.SENSOR_STATIONS[station_id]
     row, col = _station_grid_index(station_info["lat"], station_info["lng"], model)
-    water_level = float(model.dem[row, col] + model.h[row, col])
-    flow_rate = float(np.sqrt(model.u[row, col] ** 2 + model.v[row, col] ** 2))
+    depth = scalar_to_float(model.h[row, col])
+    water_level = scalar_to_float(model.dem[row, col]) + depth
+    velocity_u = scalar_to_float(model.u[row, col])
+    velocity_v = scalar_to_float(model.v[row, col])
+    flow_rate = float(np.sqrt(velocity_u**2 + velocity_v**2))
     return {
         "station_id": station_id,
         "name": station_info["name"],

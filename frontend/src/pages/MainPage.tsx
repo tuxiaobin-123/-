@@ -176,7 +176,7 @@ export const MainPage: React.FC = () => {
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null)
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null)
   const [selectedKeyPointId, setSelectedKeyPointId] = useState<string | null>(null)
-  const { floodGrid, sensors, prediction, riskStats, riskZones, evacuationRoutes, simulationStatus, caseProfile, realDataStatus, loading, error, refetchRealtime } =
+  const { floodGrid, sensors, prediction, riskStats, riskZones, evacuationRoutes, simulationStatus, caseProfile, modelCapabilities, realDataStatus, loading, error, refetchRealtime } =
     useFloodData(selectedStationId)
   const { lastMessage, connectionStatus } = useWebSocket()
 
@@ -433,6 +433,11 @@ export const MainPage: React.FC = () => {
   const connectionLabel = connectionStatus === 'connected' ? '在线' : connectionStatus === 'connecting' ? '连接中' : '离线'
   const mapBadgeLabel = lastMessage?.type === 'alert' ? '重点预警' : '全域联动'
   const mapBadgeValue = lastMessage?.type === 'alert' ? 'ALERT' : 'ACTIVE'
+  const runtimeEngineLabel =
+    modelCapabilities?.model_runtime.current_engine === 'numpy_swe_runtime'
+      ? 'SWE 水动力 + AI 预测'
+      : modelCapabilities?.model_runtime.current_engine || 'SWE + Prediction API'
+  const decisionLoopCount = modelCapabilities?.decision_loop.length || 4
 
   const etaInsight = useMemo(() => {
     if (!prediction || prediction.timestamps.length === 0 || prediction.predicted_levels.length === 0 || !selectedStation) return null
@@ -783,20 +788,16 @@ export const MainPage: React.FC = () => {
               <strong>{lastMessage?.type === 'alert' ? lastMessage.data?.alert_message || '站点出现异常波动' : '暂无新增告警'}</strong>
             </div>
             <div className="status-kpi">
-              <span>坝区调度</span>
-              <strong>{simulationStatus ? `${simulationStatus.gate_release.toFixed(0)} m³/s · ${activeScenarioName}` : '待启动'}</strong>
+              <span>物理模型 + AI 预测</span>
+              <strong>{runtimeEngineLabel} · 预测链路已接入</strong>
             </div>
             <div className="status-kpi">
-              <span>模拟进度</span>
-              <strong>
-                {simulationStatus
-                  ? `${simulationStatus.current_time_step} / ${simulationStatus.total_steps} · ${simulationStatus.progress_percent.toFixed(1)}%`
-                  : '未启动'}
-              </strong>
+              <span>大坝边界条件</span>
+              <strong>{simulationStatus ? `${activeScenarioName} · ${simulationStatus.gate_release.toFixed(0)} m³/s 泄洪 · 下游 ${simulationStatus.downstream_level.toFixed(1)} m` : '坝前/泄洪/下游水位'}</strong>
             </div>
             <div className="status-kpi">
-              <span>影响对象</span>
-              <strong>{selectedKeyPoint ? `${selectedKeyPoint.name} · ${selectedKeyPoint.water_depth.toFixed(2)} m` : '暂无关键对象受影响'}</strong>
+              <span>预警处置闭环</span>
+              <strong>{decisionLoopCount} 环节 · {riskStats?.affected_key_points?.length || 0} 个风险对象</strong>
             </div>
           </div>
         </section>

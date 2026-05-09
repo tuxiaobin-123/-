@@ -1,0 +1,9 @@
+-r requirements.txt
+
+# GPU/Tensor SWE runtime. Install a CUDA wheel matching the target machine.
+# Example for CUDA 12.1:
+# pip install torch --index-url https://download.pytorch.org/whl/cu121
+torch>=2.2
+
+# Optional JIT kernels for the NumPy fallback path.
+numba>=0.59

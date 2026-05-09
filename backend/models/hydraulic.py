@@ -14,6 +14,19 @@ from typing import Dict, List
 import numpy as np
 
 from models.dem_cache import load_dem_grid_cache
+from models.numba_kernels import sanitize_numpy_state_inplace
+
+try:
+    import torch
+except Exception:  # pragma: no cover - optional acceleration dependency
+    torch = None
+
+
+def scalar_to_float(value) -> float:
+    """Read a scalar from NumPy or Torch tensors without leaking tensor types into routers."""
+    if hasattr(value, "detach"):
+        return float(value.detach().cpu().item())
+    return float(value)
 
 
 class SWEModel:
@@ -26,6 +39,7 @@ class SWEModel:
         self.dy = dy
         self.g = 9.81
         self.dam_config = dam_config or {}
+        self.engine_name = "numpy_swe_runtime"
 
         self.raw_dem: np.ndarray | None = None
         self.dem = self._init_dem()
@@ -299,17 +313,19 @@ class SWEModel:
 
         self.h = h_old - (dhu_dx + dhu_dy) * dt
 
-        min_depth = 0.001
-        dry_mask = self.h < min_depth
-        self.h[dry_mask] = 0
-        self.u[dry_mask] = 0
-        self.v[dry_mask] = 0
-        # Keep this warning-oriented prototype numerically bounded. Without a
-        # full CFL-controlled solver, extreme scenario inputs can otherwise
-        # produce non-physical depths that make the UI and risk logic unusable.
-        self.h = np.clip(self.h, 0, 320)
-        self.u = np.nan_to_num(self.u, nan=0.0, posinf=0.0, neginf=0.0)
-        self.v = np.nan_to_num(self.v, nan=0.0, posinf=0.0, neginf=0.0)
+        # Keep this warning-oriented prototype numerically bounded. When Numba
+        # is installed this hot cleanup path is JIT-compiled; otherwise the
+        # vectorized NumPy fallback keeps default installs lightweight.
+        sanitized_by_numba = sanitize_numpy_state_inplace(self.h, self.u, self.v, max_depth=320.0, max_velocity=3.0)
+        if not sanitized_by_numba:
+            min_depth = 0.001
+            dry_mask = self.h < min_depth
+            self.h[dry_mask] = 0
+            self.u[dry_mask] = 0
+            self.v[dry_mask] = 0
+            self.h = np.clip(self.h, 0, 320)
+            self.u = np.nan_to_num(self.u, nan=0.0, posinf=0.0, neginf=0.0)
+            self.v = np.nan_to_num(self.v, nan=0.0, posinf=0.0, neginf=0.0)
 
         self.time_step += 1
         self.total_time += dt
@@ -360,3 +376,264 @@ class SWEModel:
         self.dem = self._init_dem()
         self._init_water()
         self.baseline_h = self.h.copy()
+
+
+class TensorSWEModel:
+    """Torch tensor SWE baseline with CFL time step and RK2 integration.
+
+    This class is intentionally separate from the UI-facing SWEModel. It gives
+    the project a measurable numerical baseline before swapping the runtime
+    model onto CUDA.
+    """
+
+    def __init__(self, rows: int, cols: int, dx: float, dy: float, dam_config: Dict | None = None, device: str = "auto"):
+        if torch is None:
+            raise ImportError("TensorSWEModel requires torch. Install torch or use SWEModel.")
+
+        self.rows = rows
+        self.cols = cols
+        self.dx = float(dx)
+        self.dy = float(dy)
+        self.g = 9.81
+        self.dam_config = dam_config or {}
+        self.device = self._resolve_device(device)
+        self.engine_name = f"torch_tensor_{self.device.type}"
+        self.dtype = torch.float32
+
+        self.dem = self._init_dem()
+        self.h = torch.zeros((rows, cols), dtype=self.dtype, device=self.device)
+        self.u = torch.zeros((rows, cols), dtype=self.dtype, device=self.device)
+        self.v = torch.zeros((rows, cols), dtype=self.dtype, device=self.device)
+        self.time_step = 0
+        self.total_time = 0.0
+
+        self._init_water()
+        self.baseline_h = self.h.clone()
+
+    def _resolve_device(self, device: str):
+        if device == "auto":
+            return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        if device == "cuda" and not torch.cuda.is_available():
+            return torch.device("cpu")
+        return torch.device(device)
+
+    def _dam_row(self) -> int:
+        return int(np.clip(self.dam_config.get("dam_row", max(2, self.rows // 3)), 2, self.rows - 4))
+
+    def _gate_slice(self) -> slice:
+        start = int(np.clip(self.dam_config.get("gate_start_col", int(self.cols * 0.4)), 1, self.cols - 2))
+        end = int(np.clip(self.dam_config.get("gate_end_col", int(self.cols * 0.6)), start + 1, self.cols - 1))
+        return slice(start, end)
+
+    def _init_dem(self):
+        row_axis = torch.arange(self.rows, dtype=self.dtype, device=self.device).view(-1, 1)
+        col_axis = torch.arange(self.cols, dtype=self.dtype, device=self.device).view(1, -1)
+        dam_row = self._dam_row()
+        gate_slice = self._gate_slice()
+        crest = float(self.dam_config.get("crest_elevation_m", 42.0))
+
+        side_bias = torch.abs(col_axis - (self.cols - 1) / 2.0) / max((self.cols - 1) / 2.0, 1.0)
+        downstream_slope = torch.clamp(row_axis - dam_row, min=0.0) * 0.18
+        upstream_basin = torch.clamp(dam_row - row_axis, min=0.0) * 0.08
+        dem = 18.0 + downstream_slope + side_bias * 3.2 + upstream_basin
+
+        river_center = (self.cols - 1) / 2.0 + torch.clamp(row_axis - dam_row, min=0.0) * 0.08
+        river_distance = torch.abs(col_axis - river_center)
+        dem = dem - torch.clamp(3.0 - river_distance, min=0.0) * 0.34
+
+        dam_body_start = max(0, dam_row - 1)
+        dam_body_end = min(self.rows, dam_row + 1)
+        dem[dam_body_start:dam_body_end, :] = torch.maximum(
+            dem[dam_body_start:dam_body_end, :],
+            torch.tensor(crest, dtype=self.dtype, device=self.device),
+        )
+        dem[dam_body_start:dam_body_end, gate_slice] = crest - 4.5
+
+        return torch.clamp(dem, min=0.0).to(dtype=self.dtype)
+
+    def _init_water(self) -> None:
+        dam_row = self._dam_row()
+        reservoir_level = float(self.dam_config.get("initial_reservoir_level_m", 38.0))
+        downstream_stage = float(self.dam_config.get("downstream_control_level_m", 18.5))
+
+        self.h[:dam_row, :] = torch.clamp(reservoir_level - self.dem[:dam_row, :], min=0.0)
+        self.h[dam_row:, :] = torch.clamp(downstream_stage - self.dem[dam_row:, :], min=0.0) * 0.15
+
+    def _apply_external_forcing(
+        self,
+        h,
+        dt: float,
+        rainfall_rate: float,
+        upstream_inflow: float,
+        gate_release: float,
+        downstream_stage: float,
+    ):
+        h_next = h.clone()
+        dam_row = self._dam_row()
+        gate_slice = self._gate_slice()
+
+        if rainfall_rate > 0:
+            h_next = h_next + float(rainfall_rate) * dt
+
+        if upstream_inflow > 0:
+            upstream_band = slice(0, max(2, min(dam_row, 4)))
+            inflow_depth = (float(upstream_inflow) * dt) / max(self.cols * self.dx * self.dy, 1.0)
+            h_next[upstream_band, :] = h_next[upstream_band, :] + inflow_depth
+
+        if gate_release > 0:
+            gate_width = max((gate_slice.stop - gate_slice.start) * self.dx, self.dx)
+            release_depth = (float(gate_release) * dt) / max(gate_width * self.dy, 1.0)
+            release_band = slice(dam_row, min(self.rows, dam_row + 2))
+            h_next[release_band, gate_slice] = h_next[release_band, gate_slice] + release_depth
+
+        downstream_target = torch.clamp(float(downstream_stage) - self.dem[-2:, :], min=0.0)
+        h_next[-2:, :] = torch.maximum(h_next[-2:, :], downstream_target)
+        return h_next
+
+    def _gradient_x(self, values):
+        grad = torch.zeros_like(values)
+        grad[:, 1:-1] = (values[:, 2:] - values[:, :-2]) / (2.0 * self.dx)
+        grad[:, 0] = (values[:, 1] - values[:, 0]) / self.dx
+        grad[:, -1] = (values[:, -1] - values[:, -2]) / self.dx
+        return grad
+
+    def _gradient_y(self, values):
+        grad = torch.zeros_like(values)
+        grad[1:-1, :] = (values[2:, :] - values[:-2, :]) / (2.0 * self.dy)
+        grad[0, :] = (values[1, :] - values[0, :]) / self.dy
+        grad[-1, :] = (values[-1, :] - values[-2, :]) / self.dy
+        return grad
+
+    def _rhs(self, h, u, v):
+        h_safe = torch.clamp(h, min=1e-4)
+        surface = self.dem + h
+
+        flux_x = h * u
+        flux_y = h * v
+        dh_dt = -(self._gradient_x(flux_x) + self._gradient_y(flux_y))
+
+        velocity_mag = torch.sqrt(u * u + v * v + 1e-8)
+        manning_n = float(self.dam_config.get("manning_n", 0.03))
+        friction = (manning_n**2 * self.g) / torch.pow(h_safe, 1.0 / 3.0)
+        du_dt = -self.g * self._gradient_x(surface) - friction * u * velocity_mag
+        dv_dt = -self.g * self._gradient_y(surface) - friction * v * velocity_mag
+
+        dry = h <= 1e-4
+        du_dt = torch.where(dry, torch.zeros_like(du_dt), du_dt)
+        dv_dt = torch.where(dry, torch.zeros_like(dv_dt), dv_dt)
+        return dh_dt, du_dt, dv_dt
+
+    def _sanitize_state(self) -> None:
+        min_depth = 0.0
+        max_depth = float(self.dam_config.get("max_depth_m", 320.0))
+        max_velocity = float(self.dam_config.get("max_velocity_ms", 6.0))
+
+        self.h = torch.nan_to_num(torch.clamp(self.h, min=min_depth, max=max_depth), nan=0.0, posinf=max_depth, neginf=0.0)
+        self.u = torch.nan_to_num(self.u, nan=0.0, posinf=0.0, neginf=0.0)
+        self.v = torch.nan_to_num(self.v, nan=0.0, posinf=0.0, neginf=0.0)
+
+        velocity_mag = torch.sqrt(self.u * self.u + self.v * self.v + 1e-8)
+        scale = torch.clamp(max_velocity / torch.clamp(velocity_mag, min=1e-6), max=1.0)
+        self.u = self.u * scale
+        self.v = self.v * scale
+
+        dry = self.h <= 1e-4
+        self.u = torch.where(dry, torch.zeros_like(self.u), self.u)
+        self.v = torch.where(dry, torch.zeros_like(self.v), self.v)
+
+    def compute_dt(self, cfl: float = 0.4) -> float:
+        h_safe = torch.clamp(self.h, min=1e-4)
+        wave_speed = torch.sqrt(self.g * h_safe)
+        max_speed_x = torch.max(torch.abs(self.u) + wave_speed)
+        max_speed_y = torch.max(torch.abs(self.v) + wave_speed)
+        dt_x = self.dx / torch.clamp(max_speed_x, min=1e-6)
+        dt_y = self.dy / torch.clamp(max_speed_y, min=1e-6)
+        dt = float(cfl) * float(torch.minimum(dt_x, dt_y).detach().cpu())
+        return max(dt, 1e-6)
+
+    def step_rk2(
+        self,
+        dt: float | None = None,
+        rainfall_rate: float = 0.0,
+        upstream_inflow: float = 0.0,
+        gate_release: float = 0.0,
+        downstream_stage: float = 18.5,
+    ) -> None:
+        step_dt = float(dt if dt is not None else self.compute_dt())
+        h0 = self._apply_external_forcing(self.h, step_dt, rainfall_rate, upstream_inflow, gate_release, downstream_stage)
+        u0 = self.u.clone()
+        v0 = self.v.clone()
+
+        dh1, du1, dv1 = self._rhs(h0, u0, v0)
+        h1 = h0 + step_dt * dh1
+        u1 = u0 + step_dt * du1
+        v1 = v0 + step_dt * dv1
+
+        dh2, du2, dv2 = self._rhs(h1, u1, v1)
+        self.h = 0.5 * (h0 + h1 + step_dt * dh2)
+        self.u = 0.5 * (u0 + u1 + step_dt * du2)
+        self.v = 0.5 * (v0 + v1 + step_dt * dv2)
+        self._sanitize_state()
+
+        self.time_step += 1
+        self.total_time += step_dt
+
+    def step(self, *args, **kwargs) -> None:
+        self.step_rk2(*args, **kwargs)
+
+    def get_state(self) -> Dict[str, np.ndarray]:
+        h = self.h.detach().cpu().numpy().astype(np.float32, copy=True)
+        u = self.u.detach().cpu().numpy().astype(np.float32, copy=True)
+        v = self.v.detach().cpu().numpy().astype(np.float32, copy=True)
+        dem = self.dem.detach().cpu().numpy().astype(np.float32, copy=True)
+        return {
+            "h": h,
+            "u": u,
+            "v": v,
+            "dem": dem,
+            "water_surface": dem + h,
+        }
+
+    def get_flood_grid(self, base_lat: float, base_lng: float, dx_deg: float, dy_deg: float) -> List[Dict]:
+        state = self.get_state()
+        h = state["h"]
+        u = state["u"]
+        v = state["v"]
+        dem = state["dem"]
+        baseline_h = self.baseline_h.detach().cpu().numpy().astype(np.float32, copy=False)
+
+        grid: List[Dict] = []
+        dam_row = self._dam_row()
+        for i in range(self.rows):
+            for j in range(self.cols):
+                lat = base_lat - i * dy_deg
+                lng = base_lng + j * dx_deg
+                excess_depth = max(float(h[i, j] - baseline_h[i, j]), 0.0)
+                vel_mag = float(np.sqrt(u[i, j] ** 2 + v[i, j] ** 2))
+                flooded = excess_depth > 0.01 and i >= dam_row
+
+                grid.append(
+                    {
+                        "lat": float(lat),
+                        "lng": float(lng),
+                        "depth": float(excess_depth),
+                        "velocity_u": float(u[i, j]),
+                        "velocity_v": float(v[i, j]),
+                        "velocity_mag": vel_mag,
+                        "dem": float(dem[i, j]),
+                        "water_surface": float(dem[i, j] + h[i, j]),
+                        "flooded": bool(flooded),
+                    }
+                )
+
+        return grid
+
+    def reset(self) -> None:
+        self.h = torch.zeros((self.rows, self.cols), dtype=self.dtype, device=self.device)
+        self.u = torch.zeros((self.rows, self.cols), dtype=self.dtype, device=self.device)
+        self.v = torch.zeros((self.rows, self.cols), dtype=self.dtype, device=self.device)
+        self.time_step = 0
+        self.total_time = 0.0
+        self.dem = self._init_dem()
+        self._init_water()
+        self.baseline_h = self.h.clone()

@@ -6,7 +6,10 @@ This router now serves the actual SWE model state instead of returning
 synthetic flood-grid points.
 """
 
+import os
+import time
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Dict, List
 
 import numpy as np
@@ -25,10 +28,108 @@ from config import (
     SENSOR_STATIONS,
     SIMULATION_DT,
 )
-from models.hydraulic import SWEModel
+from models.hydraulic import SWEModel, TensorSWEModel, scalar_to_float, torch
+from benchmarks.toce_river import score_toce_csv
 from services.real_observations import fetch_usgs_probe, get_oroville_2017_event
 
 router = APIRouter(prefix="/api/flood", tags=["flood"])
+
+
+def resolve_solver_engine(dam_config: Dict | None = None) -> tuple[str, str, str]:
+    """Return requested engine, selected engine, and a human-readable runtime note."""
+    dam_config = dam_config or {}
+    requested = str(
+        dam_config.get("solver_engine")
+        or os.getenv("SWE_SOLVER_ENGINE")
+        or "auto"
+    ).lower()
+    requested_device = str(dam_config.get("solver_device") or os.getenv("SWE_SOLVER_DEVICE") or "auto")
+
+    if requested not in {"auto", "torch", "cuda", "cpu", "numpy"}:
+        requested = "auto"
+
+    torch_ready = torch is not None
+    if requested in {"torch", "cuda", "cpu"} or (requested == "auto" and torch_ready):
+        if TensorSWEModel is not None and torch_ready:
+            if requested == "cuda":
+                requested_device = "cuda"
+            elif requested == "cpu":
+                requested_device = "cpu"
+            selected = "torch_tensor_runtime"
+            return requested_device, selected, "Torch tensor SWE runtime is selected; CUDA is used when available."
+
+        return requested_device, "numpy_swe_runtime", "Torch is not installed in this backend runtime; falling back to NumPy SWE."
+
+    return requested_device, "numpy_swe_runtime", "NumPy SWE runtime is selected explicitly or by fallback."
+
+
+def build_model_capability_profile() -> Dict:
+    """Expose implementation evidence for the project's three core innovations."""
+    _, selected_engine, runtime_note = resolve_solver_engine(DAM_CONFIG)
+    dam_boundary = {
+        "upstream_reservoir_level_m": float(DAM_CONFIG["initial_reservoir_level_m"]),
+        "upstream_inflow_m3s": "runtime_parameter",
+        "gate_release_m3s": float(DAM_CONFIG["default_release_m3s"]),
+        "downstream_control_level_m": float(DAM_CONFIG["downstream_control_level_m"]),
+        "dam_crest_elevation_m": float(DAM_CONFIG["crest_elevation_m"]),
+        "gate_columns": [int(DAM_CONFIG["gate_start_col"]), int(DAM_CONFIG["gate_end_col"])],
+    }
+
+    return {
+        "focus": "dam_centered_flood_warning",
+        "title": "Physics-informed dam flood digital twin",
+        "model_runtime": {
+            "current_engine": selected_engine,
+            "baseline_solver": "2D shallow-water prototype with DEM, rainfall, inflow, gate release, and downstream stage",
+            "accelerated_candidate": "TensorSWEModel with Torch tensors, CFL time step, and RK2 integration",
+            "ai_prediction": "station-level prediction API and risk trend coupling",
+            "runtime_note": runtime_note,
+        },
+        "innovation_points": {
+            "physics_ai_fusion": {
+                "label": "Physics model + AI prediction",
+                "evidence": [
+                    "SWEModel computes DEM-based water depth, velocity, and water surface.",
+                    "Prediction API feeds forecast levels and risk trend into the dashboard.",
+                    "Risk assessment consumes hydraulic grid output instead of static map decoration.",
+                ],
+            },
+            "dam_boundary_conditions": {
+                "label": "Dam-centered boundary conditions",
+                "evidence": [
+                    "Upstream reservoir level and inflow are explicit simulation inputs.",
+                    "Gate release is injected through the configured dam gate slice.",
+                    "Downstream control water level is applied as a boundary stage.",
+                    "Dam crest and gate opening are encoded in the DEM features.",
+                ],
+            },
+            "monitor_simulate_warn_respond_loop": {
+                "label": "Monitor-simulate-warn-respond loop",
+                "evidence": [
+                    "Sensor snapshots update station water level, rainfall, and flow.",
+                    "Simulation produces flood grid, risk zones, and affected key objects.",
+                    "Early warning API returns warning level, message, area, and population.",
+                    "Evacuation routes and PDF report export close the response loop.",
+                ],
+            },
+        },
+        "boundary_conditions": dam_boundary,
+        "decision_loop": [
+            "monitor_sensor_state",
+            "simulate_hydraulic_grid",
+            "evaluate_risk_objects",
+            "recommend_evacuation_routes",
+            "export_command_report",
+        ],
+        "case_evidence": {
+            "case_id": DAM_CONFIG.get("case_id", "custom"),
+            "dam_name": DAM_CONFIG["name"],
+            "river": DAM_CONFIG.get("river"),
+            "sensor_count": len(SENSOR_STATIONS),
+            "key_object_count": len(KEY_POINTS),
+            "data_sources": DAM_CONFIG.get("data_sources", []),
+        },
+    }
 
 
 class SimulationState:
@@ -64,10 +165,27 @@ class SimulationState:
 sim_state = SimulationState()
 
 
-def build_swe_model(overrides: Dict | None = None) -> SWEModel:
+def build_swe_model(overrides: Dict | None = None):
     dx_m = GRID_DX * 111000
     dy_m = GRID_DY * 111000
     dam_config = {**DAM_CONFIG, **(overrides or {})}
+    requested_device, selected_engine, _ = resolve_solver_engine(dam_config)
+
+    if selected_engine == "torch_tensor_runtime" and TensorSWEModel is not None:
+        try:
+            return TensorSWEModel(
+                rows=GRID_ROWS,
+                cols=GRID_COLS,
+                dx=dx_m,
+                dy=dy_m,
+                dam_config=dam_config,
+                device=requested_device,
+            )
+        except Exception:
+            # Keep the warning platform usable if the optional acceleration path
+            # is not available in the current Python runtime.
+            pass
+
     return SWEModel(rows=GRID_ROWS, cols=GRID_COLS, dx=dx_m, dy=dy_m, dam_config=dam_config)
 
 
@@ -110,9 +228,11 @@ def station_grid_index(station_id: str, model: SWEModel) -> tuple[int, int]:
 def build_station_snapshot(model: SWEModel, station_id: str) -> Dict:
     row, col = station_grid_index(station_id, model)
 
-    depth = float(model.h[row, col])
-    velocity = float(np.sqrt(model.u[row, col] ** 2 + model.v[row, col] ** 2))
-    water_surface = float(model.dem[row, col] + model.h[row, col])
+    depth = scalar_to_float(model.h[row, col])
+    velocity_u = scalar_to_float(model.u[row, col])
+    velocity_v = scalar_to_float(model.v[row, col])
+    velocity = float(np.sqrt(velocity_u**2 + velocity_v**2))
+    water_surface = scalar_to_float(model.dem[row, col]) + depth
 
     return {
         "timestamp": datetime.now().isoformat(),
@@ -298,6 +418,61 @@ async def get_active_case() -> Dict:
         },
         "data_sources": DAM_CONFIG.get("data_sources", []),
     }
+
+
+@router.get("/capabilities")
+async def get_model_capabilities() -> Dict:
+    return build_model_capability_profile()
+
+
+@router.get("/runtime/benchmark")
+async def benchmark_solver_runtime(engine: str = "auto", steps: int = 10) -> Dict:
+    """Run a small in-process SWE benchmark for deployment sanity checks."""
+    safe_steps = int(np.clip(steps, 1, 100))
+    model = build_swe_model({"solver_engine": engine})
+
+    start = time.perf_counter()
+    for _ in range(safe_steps):
+        model.step(
+            dt=SIMULATION_DT,
+            rainfall_rate=rainfall_mm_h_to_mps(30.0),
+            upstream_inflow=900.0,
+            gate_release=float(DAM_CONFIG["default_release_m3s"]),
+            downstream_stage=float(DAM_CONFIG["downstream_control_level_m"]),
+        )
+    elapsed_ms = (time.perf_counter() - start) * 1000
+
+    return {
+        "requested_engine": engine,
+        "actual_engine": getattr(model, "engine_name", "unknown"),
+        "grid": {"rows": model.rows, "cols": model.cols, "cells": model.rows * model.cols},
+        "steps": safe_steps,
+        "elapsed_ms": round(elapsed_ms, 3),
+        "ms_per_step": round(elapsed_ms / safe_steps, 3),
+        "torch_available": torch is not None,
+    }
+
+
+@router.get("/benchmarks/toce")
+async def get_toce_benchmark() -> Dict:
+    comparison_csv = Path(__file__).resolve().parents[1] / "data" / "toce_river_comparison.csv"
+    if not comparison_csv.exists():
+        return {
+            "benchmark": "Toce River dam-break",
+            "status": "data_not_loaded",
+            "expected_file": str(comparison_csv),
+            "required_columns": [
+                "station_id",
+                "observed_peak_depth_m",
+                "simulated_peak_depth_m",
+                "mike21_peak_depth_m",
+                "observed_arrival_s",
+                "simulated_arrival_s",
+                "mike21_arrival_s",
+            ],
+        }
+
+    return {"status": "scored", **score_toce_csv(comparison_csv)}
 
 
 @router.get("/real-data/status")

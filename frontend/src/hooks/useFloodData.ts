@@ -3,6 +3,7 @@ import {
   CaseProfile,
   EvacuationRoute,
   FloodGridPoint,
+  ModelCapabilities,
   PredictionData,
   RealDataStatus,
   RiskStats,
@@ -14,6 +15,7 @@ import {
   getActiveCase,
   getEvacuationRoutes,
   getFloodGrid,
+  getModelCapabilities,
   getPrediction,
   getRealDataStatus,
   getRiskAssessment,
@@ -31,6 +33,7 @@ interface UseFloodDataReturn {
   evacuationRoutes: EvacuationRoute[]
   simulationStatus: SimulationStatus | null
   caseProfile: CaseProfile | null
+  modelCapabilities: ModelCapabilities | null
   realDataStatus: RealDataStatus | null
   loading: boolean
   error: string | null
@@ -47,6 +50,7 @@ export const useFloodData = (selectedStationId?: string | null): UseFloodDataRet
   const [evacuationRoutes, setEvacuationRoutes] = useState<EvacuationRoute[]>([])
   const [simulationStatus, setSimulationStatus] = useState<SimulationStatus | null>(null)
   const [caseProfile, setCaseProfile] = useState<CaseProfile | null>(null)
+  const [modelCapabilities, setModelCapabilities] = useState<ModelCapabilities | null>(null)
   const [realDataStatus, setRealDataStatus] = useState<RealDataStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -106,13 +110,15 @@ export const useFloodData = (selectedStationId?: string | null): UseFloodDataRet
 
   const fetchInitialData = useCallback(async () => {
     try {
-      const [caseData, realStatus, predData] = await Promise.all([
+      const [caseData, capabilityData, realStatus, predData] = await Promise.all([
         getActiveCase(),
+        getModelCapabilities(),
         getRealDataStatus(),
         getPrediction(selectedStationId || 'usgs_11407000')
       ])
       startTransition(() => {
         setCaseProfile(caseData)
+        setModelCapabilities(capabilityData)
         setRealDataStatus(realStatus)
         setPrediction(predData)
       })
@@ -190,6 +196,7 @@ export const useFloodData = (selectedStationId?: string | null): UseFloodDataRet
     evacuationRoutes,
     simulationStatus,
     caseProfile,
+    modelCapabilities,
     realDataStatus,
     loading,
     error,

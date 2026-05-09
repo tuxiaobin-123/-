@@ -215,6 +215,42 @@ export interface CaseProfile {
   data_sources: string[]
 }
 
+export interface ModelCapabilities {
+  focus: string
+  title: string
+  model_runtime: {
+    current_engine: string
+    baseline_solver: string
+    accelerated_candidate: string
+    ai_prediction: string
+    runtime_note: string
+  }
+  innovation_points: {
+    physics_ai_fusion: {
+      label: string
+      evidence: string[]
+    }
+    dam_boundary_conditions: {
+      label: string
+      evidence: string[]
+    }
+    monitor_simulate_warn_respond_loop: {
+      label: string
+      evidence: string[]
+    }
+  }
+  boundary_conditions: Record<string, string | number | number[]>
+  decision_loop: string[]
+  case_evidence: {
+    case_id: string
+    dam_name: string
+    river?: string
+    sensor_count: number
+    key_object_count: number
+    data_sources: string[]
+  }
+}
+
 export interface RealDataStatus {
   case_id: string
   checked_at: string
