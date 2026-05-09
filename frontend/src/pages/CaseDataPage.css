@@ -115,9 +115,17 @@
   margin-top: 16px;
 }
 
+.case-runtime-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
 .case-hero-card,
 .case-kpi-card,
 .case-innovation-card,
+.case-runtime-card,
 .case-page-panel {
   border: 1px solid rgba(91, 212, 255, 0.14);
   border-radius: 22px;
@@ -127,7 +135,8 @@
 
 .case-hero-card,
 .case-kpi-card,
-.case-innovation-card {
+.case-innovation-card,
+.case-runtime-card {
   min-width: 0;
   padding: 16px;
 }
@@ -141,7 +150,8 @@
 
 .case-hero-card strong,
 .case-kpi-card strong,
-.case-innovation-card strong {
+.case-innovation-card strong,
+.case-runtime-card strong {
   display: block;
   margin-top: 8px;
   color: #f4fcff;
@@ -151,6 +161,61 @@
 .case-innovation-card strong {
   color: #45f5d0;
   font-size: 18px;
+}
+
+.case-runtime-card {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: 14px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(91, 212, 255, 0.1), transparent 38%),
+    rgba(5, 19, 32, 0.72);
+}
+
+.case-runtime-card.ready {
+  border-color: rgba(69, 245, 176, 0.26);
+}
+
+.case-runtime-card.blocked {
+  border-color: rgba(255, 213, 111, 0.22);
+}
+
+.case-runtime-card strong {
+  color: #f6fcff;
+  font-size: 22px;
+}
+
+.case-runtime-card p {
+  margin: 8px 0 0;
+  color: rgba(151, 211, 238, 0.78);
+}
+
+.case-runtime-card em {
+  color: rgba(151, 211, 238, 0.72);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.case-runtime-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.case-runtime-actions button {
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(91, 212, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(12, 42, 68, 0.72);
+  color: #cff6ff;
+  cursor: pointer;
+}
+
+.case-runtime-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .case-hero-card em {
@@ -342,6 +407,7 @@
 @media (max-width: 1280px) {
   .case-page-grid,
   .case-innovation-strip,
+  .case-runtime-strip,
   .case-page-sections,
   .case-replay-layout {
     grid-template-columns: 1fr;

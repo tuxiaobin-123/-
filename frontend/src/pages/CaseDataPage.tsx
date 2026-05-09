@@ -1,8 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Spin } from 'antd'
 import dayjs from 'dayjs'
-import { getActiveCase, getModelCapabilities, getRealDataStatus, startHistoricalReplay } from '../api/client'
-import { CaseProfile, ModelCapabilities, RealDataStatus } from '../types'
+import {
+  getActiveCase,
+  getModelCapabilities,
+  getRealDataStatus,
+  getRuntimeBenchmark,
+  getToceBenchmark,
+  startHistoricalReplay
+} from '../api/client'
+import { CaseProfile, ModelCapabilities, RealDataStatus, RuntimeBenchmark, ToceBenchmark } from '../types'
 import './CaseDataPage.css'
 
 const DATA_STATUS_COPY = {
@@ -20,18 +27,29 @@ export const CaseDataPage: React.FC = () => {
   const [caseProfile, setCaseProfile] = useState<CaseProfile | null>(null)
   const [modelCapabilities, setModelCapabilities] = useState<ModelCapabilities | null>(null)
   const [realDataStatus, setRealDataStatus] = useState<RealDataStatus | null>(null)
+  const [runtimeBenchmark, setRuntimeBenchmark] = useState<RuntimeBenchmark | null>(null)
+  const [toceBenchmark, setToceBenchmark] = useState<ToceBenchmark | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [benchmarking, setBenchmarking] = useState(false)
   const [startingReplay, setStartingReplay] = useState(false)
   const [replayMessage, setReplayMessage] = useState<string | null>(null)
 
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const [caseData, capabilityData, statusData] = await Promise.all([getActiveCase(), getModelCapabilities(), getRealDataStatus()])
+      const [caseData, capabilityData, statusData, runtimeData, toceData] = await Promise.all([
+        getActiveCase(),
+        getModelCapabilities(),
+        getRealDataStatus(),
+        getRuntimeBenchmark('auto', 5),
+        getToceBenchmark()
+      ])
       setCaseProfile(caseData)
       setModelCapabilities(capabilityData)
       setRealDataStatus(statusData)
+      setRuntimeBenchmark(runtimeData)
+      setToceBenchmark(toceData)
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : '案例数据加载失败')
@@ -50,6 +68,8 @@ export const CaseDataPage: React.FC = () => {
   const dataStatus = realDataStatus?.usgs.status || 'unavailable'
   const dataStatusCopy = DATA_STATUS_COPY[dataStatus]
   const usgsSampleCount = realDataStatus?.usgs.series.reduce((total, series) => total + series.count, 0) || 0
+  const isTorchActive = runtimeBenchmark?.actual_engine.startsWith('torch_tensor')
+  const toceReady = toceBenchmark?.status === 'scored'
   const innovationCards = useMemo(() => {
     const points = modelCapabilities?.innovation_points
     return [
@@ -89,6 +109,21 @@ export const CaseDataPage: React.FC = () => {
       setReplayMessage(err instanceof Error ? err.message : '历史回放启动失败')
     } finally {
       setStartingReplay(false)
+    }
+  }
+
+  const handleRunBenchmark = async (engine: 'auto' | 'torch') => {
+    setBenchmarking(true)
+    try {
+      const result = await getRuntimeBenchmark(engine, 20)
+      setRuntimeBenchmark(result)
+      setReplayMessage(
+        `模型基准完成：请求 ${result.requested_engine}，实际 ${result.actual_engine}，${result.ms_per_step.toFixed(2)} ms/step`
+      )
+    } catch (err) {
+      setReplayMessage(err instanceof Error ? err.message : '模型基准测试失败')
+    } finally {
+      setBenchmarking(false)
     }
   }
 
@@ -157,6 +192,46 @@ export const CaseDataPage: React.FC = () => {
             <p>{card.detail}</p>
           </article>
         ))}
+      </section>
+
+      <section className="case-runtime-strip" aria-label="模型运行与验证状态">
+        <article className={`case-runtime-card ${isTorchActive ? 'ready' : 'blocked'}`}>
+          <div>
+            <span>SOLVER RUNTIME</span>
+            <strong>{runtimeBenchmark?.actual_engine || modelCapabilities?.model_runtime.current_engine || 'unknown'}</strong>
+            <p>
+              {runtimeBenchmark
+                ? `${runtimeBenchmark.grid.cells.toLocaleString('zh-CN')} cells · ${runtimeBenchmark.steps} steps · ${runtimeBenchmark.ms_per_step.toFixed(2)} ms/step`
+                : '等待后端基准测试结果'}
+            </p>
+          </div>
+          <div className="case-runtime-actions">
+            <button type="button" onClick={() => handleRunBenchmark('auto')} disabled={benchmarking}>
+              Auto 基准
+            </button>
+            <button type="button" onClick={() => handleRunBenchmark('torch')} disabled={benchmarking}>
+              尝试 Torch
+            </button>
+          </div>
+          <em>{runtimeBenchmark?.torch_available ? 'torch 已安装，可选择 Tensor 求解器。' : '当前后端未安装 torch，Torch 请求会自动降级。'}</em>
+        </article>
+
+        <article className={`case-runtime-card ${toceReady ? 'ready' : 'blocked'}`}>
+          <div>
+            <span>TOCE RIVER VALIDATION</span>
+            <strong>{toceReady ? `${toceBenchmark?.station_count || 0} 站 RMSE 已生成` : '等待公开数据导入'}</strong>
+            <p>
+              {toceReady && toceBenchmark?.metrics
+                ? `水深 RMSE：本模型 ${toceBenchmark.metrics.peak_depth_rmse_m.this_model} m / MIKE21 ${toceBenchmark.metrics.peak_depth_rmse_m.mike21} m`
+                : `需要放入 ${toceBenchmark?.expected_file || 'backend/data/toce_river_comparison.csv'}`}
+            </p>
+          </div>
+          <em>
+            {toceReady && toceBenchmark?.metrics
+              ? `到达时间 RMSE：本模型 ${toceBenchmark.metrics.arrival_time_rmse_s.this_model}s / MIKE21 ${toceBenchmark.metrics.arrival_time_rmse_s.mike21}s`
+              : `必需字段：${(toceBenchmark?.required_columns || []).slice(0, 4).join(', ')} ...`}
+          </em>
+        </article>
       </section>
 
       <section className="case-page-sections">

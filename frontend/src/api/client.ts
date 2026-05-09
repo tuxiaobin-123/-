@@ -6,13 +6,15 @@ import {
   ModelCapabilities,
   PredictionData,
   RealDataStatus,
+  RuntimeBenchmark,
   RiskZoneCollection,
   RiskStats,
   SensorStation,
   SimulationParams,
   SimulationStatus,
   StationHistory,
-  SystemInfo
+  SystemInfo,
+  ToceBenchmark
 } from '../types'
 
 type BackendFloodGridResponse = {
@@ -226,6 +228,18 @@ export const getModelCapabilities = async (): Promise<ModelCapabilities> => {
 
 export const getRealDataStatus = async (): Promise<RealDataStatus> => {
   const response = await apiClient.get<RealDataStatus>('/flood/real-data/status')
+  return response.data
+}
+
+export const getRuntimeBenchmark = async (engine = 'auto', steps = 5): Promise<RuntimeBenchmark> => {
+  const response = await apiClient.get<RuntimeBenchmark>('/flood/runtime/benchmark', {
+    params: { engine, steps }
+  })
+  return response.data
+}
+
+export const getToceBenchmark = async (): Promise<ToceBenchmark> => {
+  const response = await apiClient.get<ToceBenchmark>('/flood/benchmarks/toce')
   return response.data
 }
 

@@ -251,6 +251,39 @@ export interface ModelCapabilities {
   }
 }
 
+export interface RuntimeBenchmark {
+  requested_engine: string
+  actual_engine: string
+  grid: {
+    rows: number
+    cols: number
+    cells: number
+  }
+  steps: number
+  elapsed_ms: number
+  ms_per_step: number
+  torch_available: boolean
+}
+
+export interface ToceBenchmark {
+  benchmark: string
+  status: 'scored' | 'data_not_loaded'
+  expected_file?: string
+  required_columns?: string[]
+  station_count?: number
+  metrics?: {
+    peak_depth_rmse_m: {
+      this_model: number
+      mike21: number
+    }
+    arrival_time_rmse_s: {
+      this_model: number
+      mike21: number
+    }
+  }
+  rows?: Array<Record<string, string | number>>
+}
+
 export interface RealDataStatus {
   case_id: string
   checked_at: string
