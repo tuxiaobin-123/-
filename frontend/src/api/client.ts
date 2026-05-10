@@ -243,6 +243,13 @@ export const getToceBenchmark = async (): Promise<ToceBenchmark> => {
   return response.data
 }
 
+export const importToceBenchmark = async (csvText: string): Promise<ToceBenchmark> => {
+  const response = await apiClient.post<ToceBenchmark>('/flood/benchmarks/toce/import', {
+    csv_text: csvText
+  })
+  return response.data
+}
+
 export const startSimulation = async (
   params: SimulationParams
 ): Promise<{

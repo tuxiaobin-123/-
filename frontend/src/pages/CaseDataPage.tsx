@@ -7,6 +7,7 @@ import {
   getRealDataStatus,
   getRuntimeBenchmark,
   getToceBenchmark,
+  importToceBenchmark,
   startHistoricalReplay
 } from '../api/client'
 import { CaseProfile, ModelCapabilities, RealDataStatus, RuntimeBenchmark, ToceBenchmark } from '../types'
@@ -22,6 +23,8 @@ const DATA_STATUS_COPY = {
 const formatCoordinate = (value?: number) => (typeof value === 'number' ? value.toFixed(5) : '-')
 const formatNumber = (value?: number, fractionDigits = 0) =>
   typeof value === 'number' ? value.toLocaleString('zh-CN', { maximumFractionDigits: fractionDigits }) : '-'
+const TOCE_CSV_TEMPLATE =
+  'station_id,observed_peak_depth_m,simulated_peak_depth_m,mike21_peak_depth_m,observed_arrival_s,simulated_arrival_s,mike21_arrival_s\n'
 
 export const CaseDataPage: React.FC = () => {
   const [caseProfile, setCaseProfile] = useState<CaseProfile | null>(null)
@@ -32,6 +35,8 @@ export const CaseDataPage: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [benchmarking, setBenchmarking] = useState(false)
+  const [toceImporting, setToceImporting] = useState(false)
+  const [toceCsvText, setToceCsvText] = useState(TOCE_CSV_TEMPLATE)
   const [startingReplay, setStartingReplay] = useState(false)
   const [replayMessage, setReplayMessage] = useState<string | null>(null)
 
@@ -124,6 +129,19 @@ export const CaseDataPage: React.FC = () => {
       setReplayMessage(err instanceof Error ? err.message : '模型基准测试失败')
     } finally {
       setBenchmarking(false)
+    }
+  }
+
+  const handleImportToce = async () => {
+    setToceImporting(true)
+    try {
+      const result = await importToceBenchmark(toceCsvText)
+      setToceBenchmark(result)
+      setReplayMessage(`Toce River 验证已导入：${result.station_count || 0} 个测点，RMSE 已刷新。`)
+    } catch (err) {
+      setReplayMessage(err instanceof Error ? err.message : 'Toce River CSV 导入失败')
+    } finally {
+      setToceImporting(false)
     }
   }
 
@@ -231,6 +249,19 @@ export const CaseDataPage: React.FC = () => {
               ? `到达时间 RMSE：本模型 ${toceBenchmark.metrics.arrival_time_rmse_s.this_model}s / MIKE21 ${toceBenchmark.metrics.arrival_time_rmse_s.mike21}s`
               : `必需字段：${(toceBenchmark?.required_columns || []).slice(0, 4).join(', ')} ...`}
           </em>
+          {!toceReady && (
+            <div className="case-toce-import">
+              <textarea
+                value={toceCsvText}
+                onChange={(event) => setToceCsvText(event.target.value)}
+                spellCheck={false}
+                aria-label="Toce River comparison CSV"
+              />
+              <button type="button" onClick={handleImportToce} disabled={toceImporting}>
+                {toceImporting ? '正在导入...' : '导入并评分'}
+              </button>
+            </div>
+          )}
         </article>
       </section>
 

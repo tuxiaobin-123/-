@@ -268,6 +268,7 @@ export interface RuntimeBenchmark {
 export interface ToceBenchmark {
   benchmark: string
   status: 'scored' | 'data_not_loaded'
+  saved_to?: string
   expected_file?: string
   required_columns?: string[]
   station_count?: number

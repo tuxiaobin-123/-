@@ -2,7 +2,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from benchmarks.toce_river import score_toce_benchmark, score_toce_csv
+from benchmarks.toce_river import (
+    load_toce_comparison_text,
+    score_toce_benchmark,
+    score_toce_csv,
+    write_toce_comparison_csv,
+)
 
 
 class ToceBenchmarkTests(unittest.TestCase):
@@ -48,6 +53,36 @@ class ToceBenchmarkTests(unittest.TestCase):
 
         self.assertEqual(result["benchmark"], "Toce River dam-break")
         self.assertEqual(result["station_count"], 1)
+
+    def test_load_toce_comparison_text_parses_rows(self):
+        rows = load_toce_comparison_text(
+            "station_id,observed_peak_depth_m,simulated_peak_depth_m,mike21_peak_depth_m,"
+            "observed_arrival_s,simulated_arrival_s,mike21_arrival_s\n"
+            "P1,1.0,1.2,1.1,10,12,11\n"
+        )
+
+        self.assertEqual(rows[0]["station_id"], "P1")
+        self.assertEqual(rows[0]["observed_peak_depth_m"], 1.0)
+
+    def test_write_toce_comparison_csv_round_trips(self):
+        rows = [
+            {
+                "station_id": "P1",
+                "observed_peak_depth_m": 1.0,
+                "simulated_peak_depth_m": 1.2,
+                "mike21_peak_depth_m": 1.1,
+                "observed_arrival_s": 10.0,
+                "simulated_arrival_s": 12.0,
+                "mike21_arrival_s": 11.0,
+            }
+        ]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csv_path = Path(tmpdir) / "nested" / "toce.csv"
+            write_toce_comparison_csv(rows, csv_path)
+            result = score_toce_csv(csv_path)
+
+        self.assertEqual(result["station_count"], 1)
+        self.assertEqual(result["metrics"]["peak_depth_rmse_m"]["this_model"], 0.2)
 
 
 if __name__ == "__main__":

@@ -29,7 +29,7 @@ from config import (
     SIMULATION_DT,
 )
 from models.hydraulic import SWEModel, TensorSWEModel, scalar_to_float, torch
-from benchmarks.toce_river import score_toce_csv
+from benchmarks.toce_river import REQUIRED_COLUMNS, load_toce_comparison_text, score_toce_csv, write_toce_comparison_csv
 from services.real_observations import fetch_usgs_probe, get_oroville_2017_event
 
 router = APIRouter(prefix="/api/flood", tags=["flood"])
@@ -298,6 +298,10 @@ class SimulationStartRequest(BaseModel):
     reservoir_level_m: float = float(DAM_CONFIG["initial_reservoir_level_m"])
 
 
+class ToceBenchmarkImportRequest(BaseModel):
+    csv_text: str
+
+
 class SimulationStatus(BaseModel):
     is_running: bool
     current_time_step: int
@@ -462,17 +466,26 @@ async def get_toce_benchmark() -> Dict:
             "status": "data_not_loaded",
             "expected_file": str(comparison_csv),
             "required_columns": [
-                "station_id",
-                "observed_peak_depth_m",
-                "simulated_peak_depth_m",
-                "mike21_peak_depth_m",
-                "observed_arrival_s",
-                "simulated_arrival_s",
-                "mike21_arrival_s",
+                *REQUIRED_COLUMNS,
             ],
         }
 
     return {"status": "scored", **score_toce_csv(comparison_csv)}
+
+
+@router.post("/benchmarks/toce/import")
+async def import_toce_benchmark(payload: ToceBenchmarkImportRequest) -> Dict:
+    comparison_csv = Path(__file__).resolve().parents[1] / "data" / "toce_river_comparison.csv"
+    try:
+        rows = load_toce_comparison_text(payload.csv_text)
+        write_toce_comparison_csv(rows, comparison_csv)
+        return {
+            "status": "scored",
+            "saved_to": str(comparison_csv),
+            **score_toce_csv(comparison_csv),
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/real-data/status")
