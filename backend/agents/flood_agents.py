@@ -186,6 +186,26 @@ class FloodAgentOrchestrator:
             "architecture": build_agent_architecture_v2(),
         }
 
+    def run_demo_summary(self) -> Dict:
+        result = self.run(
+            {
+                "scenario": "showcase_demo",
+                "rainfall_mm_h": 46.0,
+                "gate_release_m3s": 900.0,
+                "downstream_level_m": 50.5,
+            }
+        )
+        return {
+            "status": result["status"],
+            "graph_runtime": result["graph_runtime"],
+            "agent_flow": " -> ".join(step["agent"] for step in result["trace"]),
+            "risk_level": result["risk"]["level"],
+            "risk_score": result["risk"]["risk_score"],
+            "route": " -> ".join(result["dispatch"]["a_star_route"]),
+            "human_checkpoint": result["report"]["human_checkpoint"],
+            "steps": result["trace"],
+        }
+
     def _run_sequential(self, state: AgentState) -> AgentState:
         for agent in self.agents:
             state = agent.run(state)

@@ -521,6 +521,11 @@ async def run_multi_agent_demo(payload: MultiAgentRunRequest) -> Dict:
     return FloodAgentOrchestrator().run(payload.model_dump())
 
 
+@router.get("/agents/demo")
+async def get_multi_agent_demo() -> Dict:
+    return FloodAgentOrchestrator().run_demo_summary()
+
+
 @router.get("/real-data/status")
 async def get_real_data_status() -> Dict:
     station_ids = [station_id.replace("usgs_", "") for station_id in SENSOR_STATIONS if station_id.startswith("usgs_")]

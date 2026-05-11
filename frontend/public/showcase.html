@@ -268,6 +268,46 @@ section { padding: 88px 24px; }
   color: #06101c;
   font-weight: 700;
   font-size: 12px;
+  border: none;
+  cursor: pointer;
+}
+.agent-demo-panel {
+  grid-column: 1 / -1;
+  border: 1px solid rgba(0,212,255,0.18);
+  border-radius: var(--r);
+  padding: 18px;
+  background: rgba(3,12,24,0.76);
+}
+.agent-demo-panel h3 { color: #fff; font-size: 15px; margin-bottom: 10px; }
+.agent-demo-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0,1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.agent-demo-summary span {
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(0,212,255,0.07);
+  color: #c8f6ff;
+  font-size: 11px;
+}
+.agent-trace {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0,1fr));
+  gap: 8px;
+}
+.agent-trace-step {
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,212,255,0.14);
+  color: var(--muted);
+  font-size: 11px;
+}
+.agent-trace-step strong {
+  display: block;
+  color: var(--cyan);
+  margin-bottom: 5px;
 }
 
 /* ── Scenarios ───────────────────────────────────────── */
@@ -551,7 +591,7 @@ footer {
           <span>AGENT ORCHESTRATOR</span>
           <strong>LangGraph StateGraph 编排：感知 → 仿真 → 风险 → 调度 → 报告</strong>
         </div>
-        <a class="agent-demo-link" href="http://localhost:8000/api/flood/agents/architecture" target="_blank">查看架构 JSON</a>
+        <button class="agent-demo-link" onclick="runAgentDemo()">运行 5-Agent 编排</button>
       </div>
       <div class="agent-grid-v2">
         <div class="agent-card-v2">
@@ -606,8 +646,24 @@ footer {
         <span class="memory-pill">Redis State: observations</span>
         <span class="memory-pill">Redis State: risk + dispatch</span>
         <span class="memory-pill">Human Review: warning approval</span>
-        <a class="agent-demo-link" href="http://localhost:8000/api/flood/agents/run" target="_blank">运行 Agent API</a>
+        <a class="agent-demo-link" href="http://localhost:8000/api/flood/agents/demo" target="_blank">打开 Demo JSON</a>
       </aside>
+      <div class="agent-demo-panel" id="agentDemoPanel">
+        <h3>5-Agent 编排执行轨迹</h3>
+        <div class="agent-demo-summary">
+          <span>状态：等待运行</span>
+          <span>风险：-</span>
+          <span>路径：-</span>
+          <span>人工节点：-</span>
+        </div>
+        <div class="agent-trace">
+          <div class="agent-trace-step"><strong>Sensor</strong>等待输入</div>
+          <div class="agent-trace-step"><strong>Simulation</strong>等待输入</div>
+          <div class="agent-trace-step"><strong>Risk</strong>等待输入</div>
+          <div class="agent-trace-step"><strong>Dispatch</strong>等待输入</div>
+          <div class="agent-trace-step"><strong>Report</strong>等待输入</div>
+        </div>
+      </div>
     </div>
   </div>
 </section>
@@ -869,6 +925,43 @@ footer {
     <a href="http://localhost:8000/api/report/pdf" target="_blank">PDF报告</a>
   </div>
 </footer>
+
+<script>
+async function runAgentDemo() {
+  const panel = document.getElementById('agentDemoPanel');
+  if (!panel) return;
+  panel.querySelector('.agent-demo-summary').innerHTML = `
+    <span>状态：运行中</span>
+    <span>风险：计算中</span>
+    <span>路径：计算中</span>
+    <span>人工节点：等待</span>
+  `;
+  try {
+    const response = await fetch('http://localhost:8000/api/flood/agents/demo');
+    const data = await response.json();
+    panel.querySelector('.agent-demo-summary').innerHTML = `
+      <span>状态：${data.status}</span>
+      <span>风险：${data.risk_level} / ${data.risk_score}</span>
+      <span>路径：${data.route}</span>
+      <span>人工节点：${data.human_checkpoint}</span>
+    `;
+    panel.querySelector('.agent-trace').innerHTML = data.steps.map((step, index) => `
+      <div class="agent-trace-step">
+        <strong>${index + 1}. ${step.agent}</strong>
+        ${step.reasoning}<br/>
+        outputs: ${step.output_keys.join(', ')}
+      </div>
+    `).join('');
+  } catch (error) {
+    panel.querySelector('.agent-demo-summary').innerHTML = `
+      <span>状态：失败</span>
+      <span>风险：-</span>
+      <span>路径：-</span>
+      <span>错误：${error.message}</span>
+    `;
+  }
+}
+</script>
 
 </body>
 </html>

@@ -37,6 +37,15 @@ class MultiAgentOrchestratorTests(unittest.TestCase):
         self.assertIn("Ant Colony", text)
         self.assertIn("Redis", architecture["shared_memory"])
 
+    def test_demo_result_is_browser_friendly_summary(self):
+        result = FloodAgentOrchestrator().run_demo_summary()
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["agent_flow"], "sensor -> simulation -> risk -> dispatch -> report")
+        self.assertIn("risk_level", result)
+        self.assertIn("route", result)
+        self.assertEqual(len(result["steps"]), 5)
+
 
 if __name__ == "__main__":
     unittest.main()
