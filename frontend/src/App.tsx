@@ -3,6 +3,7 @@ import { ConfigProvider } from 'antd'
 import { CaseDataPage } from './pages/CaseDataPage'
 import { MainPage } from './pages/MainPage'
 import { PINNPage } from './pages/PINNPage'
+import { ShowcasePage } from './pages/ShowcasePage'
 import './App.css'
 
 const App: React.FC = () => {
@@ -11,6 +12,7 @@ const App: React.FC = () => {
 
   const isCaseDataPage = path === '/case-data' || query === 'case-data'
   const isPINNPage = path === '/pinn' || query === 'pinn'
+  const isShowcasePage = path === '/showcase' || query === 'showcase'
 
   return (
     <ConfigProvider
@@ -40,7 +42,7 @@ const App: React.FC = () => {
         }
       }}
     >
-      {isCaseDataPage ? <CaseDataPage /> : isPINNPage ? <PINNPage /> : <MainPage />}
+      {isCaseDataPage ? <CaseDataPage /> : isPINNPage ? <PINNPage /> : isShowcasePage ? <ShowcasePage /> : <MainPage />}
     </ConfigProvider>
   )
 }
