@@ -9,10 +9,23 @@ can run without API keys or network access.
 from __future__ import annotations
 
 import heapq
+import json
 import math
 import os
+import warnings
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict, List, Mapping
+
+warnings.filterwarnings(
+    "ignore",
+    message=".*allowed_objects.*",
+)
+try:  # pragma: no cover - optional dependency warning type
+    from langchain_core._api.deprecation import LangChainPendingDeprecationWarning
+
+    warnings.filterwarnings("ignore", category=LangChainPendingDeprecationWarning)
+except Exception:  # pragma: no cover - optional dependency
+    pass
 
 try:  # pragma: no cover - optional dependency
     from langgraph.graph import END, StateGraph
@@ -24,6 +37,107 @@ from models.pinn_swe import run_pinn_dry_run
 
 
 AgentState = Dict[str, object]
+
+
+class LLMReasoningAdapter:
+    """Optional OpenAI/Claude reasoning bridge with deterministic offline fallback."""
+
+    def __init__(self, env: Mapping[str, str] | None = None, timeout_s: float = 8.0) -> None:
+        self.env = env if env is not None else os.environ
+        self.timeout_s = timeout_s
+
+    def reason(self, agent_name: str, state: AgentState) -> Dict[str, str]:
+        if not self._llm_enabled():
+            has_key = bool(self.env.get("OPENAI_API_KEY") or self.env.get("ANTHROPIC_API_KEY"))
+            reason = (
+                "LLM API key is present but AGENT_REASONING_ENABLE_LLM=1 is not set"
+                if has_key
+                else "no LLM API key is configured"
+            )
+            return {
+                "mode": "deterministic",
+                "text": f"{agent_name} used deterministic reasoning because {reason}.",
+            }
+
+        try:
+            if self.env.get("OPENAI_API_KEY"):
+                return self._reason_openai(agent_name, state)
+            if self.env.get("ANTHROPIC_API_KEY"):
+                return self._reason_anthropic(agent_name, state)
+        except Exception as exc:  # pragma: no cover - depends on external APIs
+            return {
+                "mode": "error_fallback",
+                "text": f"{agent_name} LLM reasoning unavailable ({exc}); deterministic tool path used.",
+            }
+
+        return {
+            "mode": "deterministic",
+            "text": f"{agent_name} used deterministic reasoning because no LLM API key is configured.",
+        }
+
+    def _llm_enabled(self) -> bool:
+        if self.env.get("AGENT_REASONING_ENABLE_LLM") != "1":
+            return False
+        return bool(self.env.get("OPENAI_API_KEY") or self.env.get("ANTHROPIC_API_KEY"))
+
+    def _reason_openai(self, agent_name: str, state: AgentState) -> Dict[str, str]:
+        import httpx
+
+        base_url = self.env.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+        model = self.env.get("OPENAI_MODEL", "gpt-4o-mini")
+        response = httpx.post(
+            f"{base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {self.env['OPENAI_API_KEY']}"},
+            json={
+                "model": model,
+                "temperature": 0.1,
+                "max_tokens": 120,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are a flood-warning agent. Return one concise operational reasoning sentence.",
+                    },
+                    {"role": "user", "content": self._prompt(agent_name, state)},
+                ],
+            },
+            timeout=self.timeout_s,
+        )
+        response.raise_for_status()
+        text = response.json()["choices"][0]["message"]["content"].strip()
+        return {"mode": "openai", "text": text}
+
+    def _reason_anthropic(self, agent_name: str, state: AgentState) -> Dict[str, str]:
+        import httpx
+
+        base_url = self.env.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com/v1").rstrip("/")
+        model = self.env.get("ANTHROPIC_MODEL", "claude-3-5-haiku-latest")
+        response = httpx.post(
+            f"{base_url}/messages",
+            headers={
+                "x-api-key": self.env["ANTHROPIC_API_KEY"],
+                "anthropic-version": self.env.get("ANTHROPIC_VERSION", "2023-06-01"),
+            },
+            json={
+                "model": model,
+                "max_tokens": 120,
+                "temperature": 0.1,
+                "system": "You are a flood-warning agent. Return one concise operational reasoning sentence.",
+                "messages": [{"role": "user", "content": self._prompt(agent_name, state)}],
+            },
+            timeout=self.timeout_s,
+        )
+        response.raise_for_status()
+        text = response.json()["content"][0]["text"].strip()
+        return {"mode": "anthropic", "text": text}
+
+    def _prompt(self, agent_name: str, state: AgentState) -> str:
+        snapshot = {
+            key: state[key]
+            for key in ("scenario", "observations", "simulation", "risk", "dispatch", "report")
+            if key in state
+        }
+        compact_state = json.dumps(snapshot, ensure_ascii=False, default=str)[:1200]
+        return f"Agent={agent_name}. Current shared flood state: {compact_state}"
 
 
 def build_agent_architecture_v2() -> Dict:
@@ -44,16 +158,16 @@ def build_agent_architecture_v2() -> Dict:
 @dataclass
 class BaseAgent:
     name: str
+    reasoner: LLMReasoningAdapter | None = None
 
-    def think(self, state: AgentState) -> str:
-        if os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY"):
-            return f"{self.name} reasoning adapter ready; deterministic tool path used for reproducible demo."
-        return f"{self.name} used deterministic reasoning because no LLM API key is configured."
+    def think(self, state: AgentState) -> Dict[str, str]:
+        adapter = self.reasoner or LLMReasoningAdapter()
+        return adapter.reason(self.name, state)
 
 
 class SensorAgent(BaseAgent):
-    def __init__(self) -> None:
-        super().__init__("sensor")
+    def __init__(self, reasoner: LLMReasoningAdapter | None = None) -> None:
+        super().__init__("sensor", reasoner)
 
     def run(self, state: AgentState) -> AgentState:
         rainfall = float(state.get("rainfall_mm_h", 35.0))
@@ -71,8 +185,8 @@ class SensorAgent(BaseAgent):
 
 
 class SimulationAgent(BaseAgent):
-    def __init__(self) -> None:
-        super().__init__("simulation")
+    def __init__(self, reasoner: LLMReasoningAdapter | None = None) -> None:
+        super().__init__("simulation", reasoner)
 
     def run(self, state: AgentState) -> AgentState:
         obs = state["observations"]
@@ -97,8 +211,8 @@ class SimulationAgent(BaseAgent):
 
 
 class RiskAgent(BaseAgent):
-    def __init__(self) -> None:
-        super().__init__("risk")
+    def __init__(self, reasoner: LLMReasoningAdapter | None = None) -> None:
+        super().__init__("risk", reasoner)
 
     def run(self, state: AgentState) -> AgentState:
         sim = state["simulation"]
@@ -119,8 +233,8 @@ class RiskAgent(BaseAgent):
 
 
 class DispatchAgent(BaseAgent):
-    def __init__(self) -> None:
-        super().__init__("dispatch")
+    def __init__(self, reasoner: LLMReasoningAdapter | None = None) -> None:
+        super().__init__("dispatch", reasoner)
 
     def run(self, state: AgentState) -> AgentState:
         graph = {
@@ -144,8 +258,8 @@ class DispatchAgent(BaseAgent):
 
 
 class ReportAgent(BaseAgent):
-    def __init__(self) -> None:
-        super().__init__("report")
+    def __init__(self, reasoner: LLMReasoningAdapter | None = None) -> None:
+        super().__init__("report", reasoner)
 
     def run(self, state: AgentState) -> AgentState:
         report = {
@@ -160,15 +274,22 @@ class ReportAgent(BaseAgent):
 
 
 class FloodAgentOrchestrator:
-    def __init__(self) -> None:
-        self.agents = [SensorAgent(), SimulationAgent(), RiskAgent(), DispatchAgent(), ReportAgent()]
+    def __init__(self, reasoner: LLMReasoningAdapter | None = None) -> None:
+        self.reasoner = reasoner or LLMReasoningAdapter()
+        self.agents = [
+            SensorAgent(self.reasoner),
+            SimulationAgent(self.reasoner),
+            RiskAgent(self.reasoner),
+            DispatchAgent(self.reasoner),
+            ReportAgent(self.reasoner),
+        ]
 
     def run(self, inputs: AgentState | None = None) -> Dict:
         state: AgentState = dict(inputs or {})
         state.setdefault("trace", [])
-        if StateGraph is not None:
+        if StateGraph is not None and END is not None:
             state["graph_runtime"] = "langgraph"
-            state = self._run_sequential(state)
+            state = self._run_langgraph(state)
         else:
             state["graph_runtime"] = "sequential_fallback"
             state = self._run_sequential(state)
@@ -203,6 +324,7 @@ class FloodAgentOrchestrator:
             "risk_score": result["risk"]["risk_score"],
             "route": " -> ".join(result["dispatch"]["a_star_route"]),
             "human_checkpoint": result["report"]["human_checkpoint"],
+            "reasoning_modes": {step["agent"]: step.get("reasoning_mode", "deterministic") for step in result["trace"]},
             "steps": result["trace"],
         }
 
@@ -211,14 +333,34 @@ class FloodAgentOrchestrator:
             state = agent.run(state)
         return state
 
+    def _run_langgraph(self, state: AgentState) -> AgentState:
+        workflow = StateGraph(dict)
+        agent_names = [agent.name for agent in self.agents]
+        for agent in self.agents:
+            workflow.add_node(agent.name, agent.run)
+        workflow.set_entry_point(agent_names[0])
+        for source, target in zip(agent_names, agent_names[1:]):
+            workflow.add_edge(source, target)
+        workflow.add_edge(agent_names[-1], END)
+        graph = workflow.compile()
+        return graph.invoke(state)
+
 
 def run_demo_multi_agent(inputs: AgentState | None = None) -> Dict:
     return FloodAgentOrchestrator().run(inputs)
 
 
-def _append_trace(state: AgentState, agent: str, reasoning: str, output: Dict) -> None:
+def _append_trace(state: AgentState, agent: str, reasoning: Dict[str, str] | str, output: Dict) -> None:
+    if isinstance(reasoning, dict):
+        reasoning_text = reasoning.get("text", "")
+        reasoning_mode = reasoning.get("mode", "deterministic")
+    else:
+        reasoning_text = reasoning
+        reasoning_mode = "deterministic"
     state.setdefault("trace", [])
-    state["trace"].append({"agent": agent, "reasoning": reasoning, "output_keys": sorted(output.keys())})
+    state["trace"].append(
+        {"agent": agent, "reasoning": reasoning_text, "reasoning_mode": reasoning_mode, "output_keys": sorted(output.keys())}
+    )
 
 
 def _enkf_update(forecast: float, measurement: float, forecast_var: float = 0.18, obs_var: float = 0.08) -> float:
