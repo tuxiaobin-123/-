@@ -198,6 +198,77 @@ section { padding: 88px 24px; }
   display: flex; align-items: center; padding: 0 4px; color: var(--cyan);
   font-size: 18px; flex-shrink: 0;
 }
+.agent-arch-v2 {
+  margin-top: 46px;
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 18px;
+}
+.orchestrator-band {
+  grid-column: 1 / -1;
+  border: 1px solid rgba(0,212,255,0.35);
+  border-radius: var(--r);
+  padding: 18px 22px;
+  background: linear-gradient(90deg, rgba(0,212,255,0.14), rgba(79,70,229,0.10));
+  display: flex; align-items: center; justify-content: space-between; gap: 18px;
+}
+.orchestrator-band strong { color: #fff; font-size: 18px; }
+.orchestrator-band span { color: var(--cyan); font-size: 12px; letter-spacing: 1px; }
+.agent-grid-v2 {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+.agent-card-v2 {
+  min-height: 245px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 18px;
+  background: rgba(10,22,40,0.82);
+  position: relative;
+  overflow: hidden;
+}
+.agent-card-v2::before {
+  content: "";
+  position: absolute; inset: 0 0 auto 0; height: 3px;
+  background: linear-gradient(90deg, var(--cyan), var(--green));
+}
+.agent-card-v2 h3 { margin: 8px 0 8px; font-size: 15px; color: #fff; }
+.agent-card-v2 .agent-role { color: var(--cyan); font-size: 11px; letter-spacing: .8px; }
+.agent-card-v2 ul { list-style: none; margin-top: 12px; }
+.agent-card-v2 li {
+  padding: 7px 0;
+  color: var(--muted);
+  font-size: 11px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.side-memory {
+  border: 1px solid rgba(0,255,136,0.22);
+  border-radius: var(--r);
+  padding: 20px;
+  background: rgba(0,255,136,0.045);
+}
+.side-memory h3 { color: var(--green); margin-bottom: 12px; font-size: 15px; }
+.side-memory p { color: var(--muted); font-size: 12px; line-height: 1.7; margin-bottom: 12px; }
+.memory-pill {
+  display: block;
+  padding: 8px 10px;
+  margin-top: 8px;
+  border-radius: 10px;
+  background: rgba(0,212,255,0.08);
+  color: #c8f6ff;
+  font-size: 11px;
+}
+.agent-demo-link {
+  margin-top: 18px;
+  display: inline-flex;
+  padding: 10px 16px;
+  border-radius: 20px;
+  background: var(--cyan);
+  color: #06101c;
+  font-weight: 700;
+  font-size: 12px;
+}
 
 /* ── Scenarios ───────────────────────────────────────── */
 #scenarios { background: var(--bg2); }
@@ -471,64 +542,72 @@ footer {
 <!-- Architecture -->
 <section id="arch">
   <div class="section-inner">
-    <div class="section-tag">System Architecture</div>
-    <h2 class="section-title">五层技术架构</h2>
-    <p class="section-desc">从传感器数据到决策输出的完整闭环</p>
-    <div class="arch-flow">
-      <div class="arch-layer">
-        <div class="arch-layer-icon">📡</div>
-        <div class="arch-layer-name">数据层</div>
-        <ul class="arch-layer-items">
-          <li>4个水文监测站</li>
-          <li>和风天气降雨预报</li>
-          <li>DEM地形数据</li>
-          <li>历史洪水年鉴</li>
-        </ul>
+    <div class="section-tag">System Architecture v2</div>
+    <h2 class="section-title">多 Agent 智能体架构</h2>
+    <p class="section-desc">每个 Agent 内部绑定真实模型工具，不再只是概念分层</p>
+    <div class="agent-arch-v2">
+      <div class="orchestrator-band">
+        <div>
+          <span>AGENT ORCHESTRATOR</span>
+          <strong>LangGraph StateGraph 编排：感知 → 仿真 → 风险 → 调度 → 报告</strong>
+        </div>
+        <a class="agent-demo-link" href="http://localhost:8000/api/flood/agents/architecture" target="_blank">查看架构 JSON</a>
       </div>
-      <div class="arch-arrow">→</div>
-      <div class="arch-layer">
-        <div class="arch-layer-icon">⚙️</div>
-        <div class="arch-layer-name">模型层</div>
-        <ul class="arch-layer-items">
-          <li>SWE浅水方程</li>
-          <li>有限体积法</li>
-          <li>LSTM水位预测</li>
-          <li>桑干河DEM网格</li>
-        </ul>
+      <div class="agent-grid-v2">
+        <div class="agent-card-v2">
+          <div class="agent-role">Sensor Agent</div>
+          <h3>感知智能体</h3>
+          <ul>
+            <li>USGS/雨量/库水位接入</li>
+            <li>DEM 与监测点质量检查</li>
+            <li>形成共享观测状态</li>
+          </ul>
+        </div>
+        <div class="agent-card-v2">
+          <div class="agent-role">Simulation Agent</div>
+          <h3>仿真智能体</h3>
+          <ul>
+            <li>PINN-SWE 物理残差</li>
+            <li>Tensor SWE / CUDA 路径</li>
+            <li>坝前坝后边界条件</li>
+          </ul>
+        </div>
+        <div class="agent-card-v2">
+          <div class="agent-role">Risk Agent</div>
+          <h3>风险智能体</h3>
+          <ul>
+            <li>EnKF 观测同化</li>
+            <li>MC Dropout 不确定性</li>
+            <li>关键对象风险分级</li>
+          </ul>
+        </div>
+        <div class="agent-card-v2">
+          <div class="agent-role">Dispatch Agent</div>
+          <h3>调度智能体</h3>
+          <ul>
+            <li>A* 避险路径搜索</li>
+            <li>蚁群安全通道优化</li>
+            <li>下游人群转移建议</li>
+          </ul>
+        </div>
+        <div class="agent-card-v2">
+          <div class="agent-role">Report Agent</div>
+          <h3>报告智能体</h3>
+          <ul>
+            <li>证据链自动汇总</li>
+            <li>PDF/API 指挥报告</li>
+            <li>人工确认节点输出</li>
+          </ul>
+        </div>
       </div>
-      <div class="arch-arrow">→</div>
-      <div class="arch-layer">
-        <div class="arch-layer-icon">🖥️</div>
-        <div class="arch-layer-name">计算层</div>
-        <ul class="arch-layer-items">
-          <li>NumPy矩阵运算</li>
-          <li>FastAPI异步处理</li>
-          <li>WebSocket实时推送</li>
-          <li>堰流+Muskingum演算</li>
-        </ul>
-      </div>
-      <div class="arch-arrow">→</div>
-      <div class="arch-layer">
-        <div class="arch-layer-icon">🎯</div>
-        <div class="arch-layer-name">决策层</div>
-        <ul class="arch-layer-items">
-          <li>四级动态风险评估</li>
-          <li>Dijkstra避险路径</li>
-          <li>溃坝级联推演</li>
-          <li>应急处置建议</li>
-        </ul>
-      </div>
-      <div class="arch-arrow">→</div>
-      <div class="arch-layer">
-        <div class="arch-layer-icon">📱</div>
-        <div class="arch-layer-name">展示层</div>
-        <ul class="arch-layer-items">
-          <li>Leaflet WebGIS地图</li>
-          <li>ECharts预测图表</li>
-          <li>Ant Design仪表盘</li>
-          <li>移动端指挥官视图</li>
-        </ul>
-      </div>
+      <aside class="side-memory">
+        <h3>人在回路 + 共享内存</h3>
+        <p>右侧共享状态承载 Redis / in-process fallback，保存观测、仿真、风险、调度和人工审批结果。</p>
+        <span class="memory-pill">Redis State: observations</span>
+        <span class="memory-pill">Redis State: risk + dispatch</span>
+        <span class="memory-pill">Human Review: warning approval</span>
+        <a class="agent-demo-link" href="http://localhost:8000/api/flood/agents/run" target="_blank">运行 Agent API</a>
+      </aside>
     </div>
   </div>
 </section>

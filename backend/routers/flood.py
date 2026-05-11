@@ -16,6 +16,7 @@ import numpy as np
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from agents.flood_agents import FloodAgentOrchestrator, build_agent_architecture_v2
 from config import (
     BASE_LAT,
     BASE_LNG,
@@ -303,6 +304,13 @@ class ToceBenchmarkImportRequest(BaseModel):
     csv_text: str
 
 
+class MultiAgentRunRequest(BaseModel):
+    scenario: str = "strong_rain_release"
+    rainfall_mm_h: float = 46.0
+    gate_release_m3s: float = 900.0
+    downstream_level_m: float = 50.5
+
+
 class SimulationStatus(BaseModel):
     is_running: bool
     current_time_step: int
@@ -501,6 +509,16 @@ async def run_pinn_diagnostics(points: int = 64) -> Dict:
             "required_dependency": "torch",
             "collocation_points": safe_points,
         }
+
+
+@router.get("/agents/architecture")
+async def get_agent_architecture() -> Dict:
+    return build_agent_architecture_v2()
+
+
+@router.post("/agents/run")
+async def run_multi_agent_demo(payload: MultiAgentRunRequest) -> Dict:
+    return FloodAgentOrchestrator().run(payload.model_dump())
 
 
 @router.get("/real-data/status")
