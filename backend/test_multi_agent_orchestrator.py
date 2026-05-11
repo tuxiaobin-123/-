@@ -1,6 +1,7 @@
 import unittest
 
-from agents.flood_agents import FloodAgentOrchestrator, build_agent_architecture_v2
+from agents import flood_agents
+from agents.flood_agents import FloodAgentOrchestrator, LLMReasoningAdapter, build_agent_architecture_v2
 
 
 class MultiAgentOrchestratorTests(unittest.TestCase):
@@ -45,6 +46,48 @@ class MultiAgentOrchestratorTests(unittest.TestCase):
         self.assertIn("risk_level", result)
         self.assertIn("route", result)
         self.assertEqual(len(result["steps"]), 5)
+
+    def test_reasoning_adapter_falls_back_without_api_key(self):
+        adapter = LLMReasoningAdapter(env={})
+
+        result = adapter.reason("sensor", {"rainfall_mm_h": 10})
+
+        self.assertEqual(result["mode"], "deterministic")
+        self.assertIn("no LLM API key", result["text"])
+
+    def test_orchestrator_uses_langgraph_runtime_when_available(self):
+        class FakeCompiledGraph:
+            def invoke(self, state):
+                return FloodAgentOrchestrator()._run_sequential(state)
+
+        class FakeStateGraph:
+            def __init__(self, _state_type):
+                self.nodes = {}
+
+            def add_node(self, name, fn):
+                self.nodes[name] = fn
+
+            def set_entry_point(self, _name):
+                pass
+
+            def add_edge(self, _source, _target):
+                pass
+
+            def compile(self):
+                return FakeCompiledGraph()
+
+        original_graph = flood_agents.StateGraph
+        original_end = flood_agents.END
+        try:
+            flood_agents.StateGraph = FakeStateGraph
+            flood_agents.END = "__end__"
+            result = FloodAgentOrchestrator().run()
+        finally:
+            flood_agents.StateGraph = original_graph
+            flood_agents.END = original_end
+
+        self.assertEqual(result["graph_runtime"], "langgraph")
+        self.assertEqual(result["status"], "completed")
 
 
 if __name__ == "__main__":
