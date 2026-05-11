@@ -281,7 +281,7 @@ section { padding: 88px 24px; }
 .agent-demo-panel h3 { color: #fff; font-size: 15px; margin-bottom: 10px; }
 .agent-demo-summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0,1fr));
+  grid-template-columns: repeat(5, minmax(0,1fr));
   gap: 10px;
   margin-bottom: 12px;
 }
@@ -308,6 +308,15 @@ section { padding: 88px 24px; }
   display: block;
   color: var(--cyan);
   margin-bottom: 5px;
+}
+.agent-trace-step em {
+  display: inline-flex;
+  margin-bottom: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(0,212,255,0.1);
+  color: #8af4ff;
+  font-style: normal;
 }
 
 /* ── Scenarios ───────────────────────────────────────── */
@@ -655,6 +664,7 @@ footer {
           <span>风险：-</span>
           <span>路径：-</span>
           <span>人工节点：-</span>
+          <span>运行：-</span>
         </div>
         <div class="agent-trace">
           <div class="agent-trace-step"><strong>Sensor</strong>等待输入</div>
@@ -935,19 +945,23 @@ async function runAgentDemo() {
     <span>风险：计算中</span>
     <span>路径：计算中</span>
     <span>人工节点：等待</span>
+    <span>运行：请求后端</span>
   `;
   try {
-    const response = await fetch('http://localhost:8000/api/flood/agents/demo');
+    const apiHost = window.location.hostname || 'localhost';
+    const response = await fetch(`http://${apiHost}:8000/api/flood/agents/demo`);
     const data = await response.json();
     panel.querySelector('.agent-demo-summary').innerHTML = `
       <span>状态：${data.status}</span>
       <span>风险：${data.risk_level} / ${data.risk_score}</span>
       <span>路径：${data.route}</span>
       <span>人工节点：${data.human_checkpoint}</span>
+      <span>运行：${data.graph_runtime}</span>
     `;
     panel.querySelector('.agent-trace').innerHTML = data.steps.map((step, index) => `
       <div class="agent-trace-step">
         <strong>${index + 1}. ${step.agent}</strong>
+        <em>${step.reasoning_mode || 'deterministic'}</em><br/>
         ${step.reasoning}<br/>
         outputs: ${step.output_keys.join(', ')}
       </div>
@@ -958,6 +972,7 @@ async function runAgentDemo() {
       <span>风险：-</span>
       <span>路径：-</span>
       <span>错误：${error.message}</span>
+      <span>运行：失败</span>
     `;
   }
 }
