@@ -133,7 +133,7 @@ class LLMReasoningAdapter:
     def _prompt(self, agent_name: str, state: AgentState) -> str:
         snapshot = {
             key: state[key]
-            for key in ("scenario", "observations", "simulation", "risk", "dispatch", "report")
+            for key in ("scenario", "communication", "observations", "simulation", "risk", "dispatch", "evaluation", "report")
             if key in state
         }
         compact_state = json.dumps(snapshot, ensure_ascii=False, default=str)[:1200]
@@ -145,12 +145,17 @@ def build_agent_architecture_v2() -> Dict:
         "orchestrator": "Agent Orchestrator: LangGraph StateGraph with deterministic fallback",
         "shared_memory": "Shared memory: Redis state channel or in-process state dict fallback",
         "human_in_loop": "Human-in-the-loop: command review, warning confirmation, dispatch override",
+        "collaboration_modes": {
+            "serial_pipeline": "simulation -> risk -> dispatch -> evaluation",
+            "parallel_merge": "simulation and observation-risk branches can be computed independently then merged",
+            "evaluation_loop": "evaluation can reject a dispatch plan and request a replanning pass",
+        },
         "agents": [
-            {"name": "Sensor Agent", "tech": "USGS/DEM/rainfall ingestion + data quality checks"},
+            {"name": "Communication Agent", "tech": "natural-language command parsing + message routing"},
             {"name": "Simulation Agent", "tech": "PINN-SWE + tensor SWE + dam boundary conditions"},
             {"name": "Risk Agent", "tech": "EnKF assimilation + MC Dropout uncertainty + risk objects"},
             {"name": "Dispatch Agent", "tech": "A* route search + Ant Colony route refinement"},
-            {"name": "Report Agent", "tech": "evidence chain + PDF/API command report"},
+            {"name": "Evaluation Agent", "tech": "multi-criteria fusion + score explanation"},
         ],
     }
 
@@ -165,22 +170,31 @@ class BaseAgent:
         return adapter.reason(self.name, state)
 
 
-class SensorAgent(BaseAgent):
+class CommunicationAgent(BaseAgent):
     def __init__(self, reasoner: LLMReasoningAdapter | None = None) -> None:
-        super().__init__("sensor", reasoner)
+        super().__init__("communication", reasoner)
 
     def run(self, state: AgentState) -> AgentState:
+        instruction = str(state.get("user_instruction", state.get("scenario", "run dam flood warning workflow")))
         rainfall = float(state.get("rainfall_mm_h", 35.0))
         release = float(state.get("gate_release_m3s", 600.0))
         downstream = float(state.get("downstream_level_m", 50.0))
+        route = _route_instruction(instruction, rainfall, release)
         observations = {
             "rainfall_mm_h": rainfall,
             "gate_release_m3s": release,
             "downstream_level_m": downstream,
             "data_quality": "offline_demo_seed",
         }
+        communication = {
+            "user_instruction": instruction,
+            "message_route": route,
+            "normalized_inputs": observations,
+            "shared_memory_writes": ["observations", "message_route"],
+        }
+        state["communication"] = communication
         state["observations"] = observations
-        _append_trace(state, self.name, self.think(state), observations)
+        _append_trace(state, self.name, self.think(state), communication)
         return state
 
 
@@ -237,38 +251,46 @@ class DispatchAgent(BaseAgent):
         super().__init__("dispatch", reasoner)
 
     def run(self, state: AgentState) -> AgentState:
-        graph = {
-            "dam": {"ridge": 4, "north_shelter": 9},
-            "ridge": {"school": 3, "hospital": 6},
-            "school": {"shelter": 4},
-            "hospital": {"shelter": 2},
-            "north_shelter": {"shelter": 5},
-            "shelter": {},
-        }
+        is_replan = bool(state.get("evaluation_feedback"))
+        graph = _dispatch_graph(is_replan)
         route, cost = _a_star(graph, "dam", "shelter")
         dispatch = {
             "a_star_route": route,
             "ant_colony_refined_route": _ant_colony_refine(route),
             "estimated_minutes": int(cost * 3),
             "override_required": state["risk"]["level"] in {"high", "extreme"},
+            "multi_objective_tradeoff": _dispatch_tradeoff(state["risk"]["level"], route, cost, is_replan),
         }
         state["dispatch"] = dispatch
         _append_trace(state, self.name, self.think(state), dispatch)
         return state
 
 
-class ReportAgent(BaseAgent):
+class EvaluationAgent(BaseAgent):
     def __init__(self, reasoner: LLMReasoningAdapter | None = None) -> None:
-        super().__init__("report", reasoner)
+        super().__init__("evaluation", reasoner)
 
     def run(self, state: AgentState) -> AgentState:
-        report = {
-            "summary": f"{state['risk']['level']} risk; route {' -> '.join(state['dispatch']['a_star_route'])}",
-            "human_checkpoint": "approve_release_warning" if state["dispatch"]["override_required"] else "monitor",
-            "memory_keys": ["observations", "simulation", "risk", "dispatch"],
+        risk = state["risk"]
+        dispatch = state["dispatch"]
+        plan_score, criteria = _score_dispatch_plan(risk, dispatch)
+        threshold = float(state.get("min_plan_score", 55.0))
+        verdict = "approved" if plan_score >= threshold else "replan_required"
+        evaluation = {
+            "plan_score": plan_score,
+            "threshold": threshold,
+            "verdict": verdict,
+            "criteria": criteria,
+            "explanation": _explain_score(criteria, verdict),
         }
+        report = {
+            "summary": f"{risk['level']} risk; plan score {plan_score}; route {' -> '.join(dispatch['a_star_route'])}",
+            "human_checkpoint": "approve_dispatch_plan" if verdict == "approved" and dispatch["override_required"] else "monitor",
+            "memory_keys": ["communication", "observations", "simulation", "risk", "dispatch", "evaluation"],
+        }
+        state["evaluation"] = evaluation
         state["report"] = report
-        _append_trace(state, self.name, self.think(state), report)
+        _append_trace(state, self.name, self.think(state), evaluation)
         state["status"] = "completed"
         return state
 
@@ -276,12 +298,14 @@ class ReportAgent(BaseAgent):
 class FloodAgentOrchestrator:
     def __init__(self, reasoner: LLMReasoningAdapter | None = None) -> None:
         self.reasoner = reasoner or LLMReasoningAdapter()
+        self.dispatch_agent = DispatchAgent(self.reasoner)
+        self.evaluation_agent = EvaluationAgent(self.reasoner)
         self.agents = [
-            SensorAgent(self.reasoner),
+            CommunicationAgent(self.reasoner),
             SimulationAgent(self.reasoner),
             RiskAgent(self.reasoner),
-            DispatchAgent(self.reasoner),
-            ReportAgent(self.reasoner),
+            self.dispatch_agent,
+            self.evaluation_agent,
         ]
 
     def run(self, inputs: AgentState | None = None) -> Dict:
@@ -293,17 +317,23 @@ class FloodAgentOrchestrator:
         else:
             state["graph_runtime"] = "sequential_fallback"
             state = self._run_sequential(state)
+        state = self._apply_evaluation_loop(state)
+        state["collaboration_modes"] = _build_collaboration_modes(state)
 
         return {
             "status": state["status"],
             "graph_runtime": state["graph_runtime"],
             "agent_count": len(self.agents),
             "trace": state["trace"],
+            "communication": state["communication"],
             "observations": state["observations"],
             "simulation": state["simulation"],
             "risk": state["risk"],
             "dispatch": state["dispatch"],
+            "evaluation": state["evaluation"],
             "report": state["report"],
+            "replan_count": state["replan_count"],
+            "collaboration_modes": state["collaboration_modes"],
             "architecture": build_agent_architecture_v2(),
         }
 
@@ -323,7 +353,10 @@ class FloodAgentOrchestrator:
             "risk_level": result["risk"]["level"],
             "risk_score": result["risk"]["risk_score"],
             "route": " -> ".join(result["dispatch"]["a_star_route"]),
+            "plan_score": result["evaluation"]["plan_score"],
+            "evaluation_verdict": result["evaluation"]["verdict"],
             "human_checkpoint": result["report"]["human_checkpoint"],
+            "collaboration_modes": result["collaboration_modes"],
             "reasoning_modes": {step["agent"]: step.get("reasoning_mode", "deterministic") for step in result["trace"]},
             "steps": result["trace"],
         }
@@ -345,6 +378,20 @@ class FloodAgentOrchestrator:
         graph = workflow.compile()
         return graph.invoke(state)
 
+    def _apply_evaluation_loop(self, state: AgentState) -> AgentState:
+        state["replan_count"] = int(state.get("replan_count", 0))
+        max_replans = int(state.get("max_replans", 0))
+        if state["evaluation"]["verdict"] == "replan_required" and state["replan_count"] < max_replans:
+            state["replan_count"] += 1
+            state["evaluation_feedback"] = {
+                "request": "replan",
+                "reason": state["evaluation"]["explanation"],
+                "avoid": "fastest_route_under_high_risk",
+            }
+            state = self.dispatch_agent.run(state)
+            state = self.evaluation_agent.run(state)
+        return state
+
 
 def run_demo_multi_agent(inputs: AgentState | None = None) -> Dict:
     return FloodAgentOrchestrator().run(inputs)
@@ -361,6 +408,103 @@ def _append_trace(state: AgentState, agent: str, reasoning: Dict[str, str] | str
     state["trace"].append(
         {"agent": agent, "reasoning": reasoning_text, "reasoning_mode": reasoning_mode, "output_keys": sorted(output.keys())}
     )
+
+
+def _route_instruction(instruction: str, rainfall: float, release: float) -> Dict:
+    text = instruction.lower()
+    wants_dispatch = any(token in instruction for token in ("调度", "路线", "避险", "转移")) or "dispatch" in text
+    wants_risk = any(token in instruction for token in ("风险", "评估", "预警")) or "risk" in text
+    wants_simulation = any(token in instruction for token in ("仿真", "模拟", "洪水", "水位")) or "simulation" in text
+    if rainfall >= 60.0 or release >= 800.0:
+        wants_risk = True
+        wants_simulation = True
+    intent = "risk_dispatch" if wants_dispatch and wants_risk else "flood_simulation" if wants_simulation else "status_check"
+    targets = ["simulation"]
+    if wants_risk:
+        targets.append("risk")
+    if wants_dispatch:
+        targets.append("dispatch")
+    targets.append("evaluation")
+    return {
+        "intent": intent,
+        "target_agents": list(dict.fromkeys(targets)),
+        "priority": "high" if rainfall >= 80.0 or release >= 1000.0 else "normal",
+    }
+
+
+def _dispatch_graph(is_replan: bool) -> Dict[str, Dict[str, float]]:
+    if is_replan:
+        return {
+            "dam": {"north_shelter": 7, "ridge": 8},
+            "ridge": {"hospital": 4},
+            "hospital": {"shelter": 3},
+            "north_shelter": {"shelter": 4},
+            "shelter": {},
+        }
+    return {
+        "dam": {"ridge": 4, "north_shelter": 9},
+        "ridge": {"school": 3, "hospital": 6},
+        "school": {"shelter": 4},
+        "hospital": {"shelter": 2},
+        "north_shelter": {"shelter": 5},
+        "shelter": {},
+    }
+
+
+def _dispatch_tradeoff(risk_level: str, route: List[str], cost: float, is_replan: bool) -> Dict:
+    return {
+        "safety": "prefer high-ground corridor" if is_replan or risk_level in {"high", "extreme"} else "standard corridor",
+        "time_cost": round(cost, 2),
+        "resource_load": "moderate" if len(route) <= 4 else "high",
+        "conflict": "safety_over_speed" if is_replan else "balanced_speed_and_safety",
+    }
+
+
+def _score_dispatch_plan(risk: Dict, dispatch: Dict) -> tuple[float, Dict[str, float]]:
+    risk_score = float(risk["risk_score"])
+    spread = float(risk["mc_dropout"]["spread_m"])
+    estimated_minutes = float(dispatch["estimated_minutes"])
+    safety_score = max(0.0, 100.0 - risk_score)
+    confidence_score = max(0.0, 100.0 - spread * 35.0)
+    timeliness_score = max(0.0, 100.0 - estimated_minutes * 2.0)
+    resource_score = 82.0 if dispatch["override_required"] else 90.0
+    score = round(
+        safety_score * 0.42 + confidence_score * 0.22 + timeliness_score * 0.24 + resource_score * 0.12,
+        2,
+    )
+    return score, {
+        "safety": round(safety_score, 2),
+        "confidence": round(confidence_score, 2),
+        "timeliness": round(timeliness_score, 2),
+        "resource": round(resource_score, 2),
+    }
+
+
+def _explain_score(criteria: Dict[str, float], verdict: str) -> str:
+    weakest = min(criteria, key=criteria.get)
+    if verdict == "approved":
+        return f"plan approved; weakest dimension is {weakest}={criteria[weakest]}"
+    return f"plan rejected; {weakest}={criteria[weakest]} is below expected operating margin"
+
+
+def _build_collaboration_modes(state: AgentState) -> Dict:
+    replan_count = int(state.get("replan_count", 0))
+    return {
+        "serial_pipeline": {
+            "status": "active",
+            "flow": "communication -> simulation -> risk -> dispatch -> evaluation",
+        },
+        "parallel_merge": {
+            "status": "ready",
+            "merge_points": ["observations", "simulation", "risk"],
+            "note": "observation-risk screening can run beside hydraulic simulation before final risk fusion",
+        },
+        "evaluation_loop": {
+            "status": "triggered" if replan_count else "not_triggered",
+            "replan_count": replan_count,
+            "max_replans": int(state.get("max_replans", 0)),
+        },
+    }
 
 
 def _enkf_update(forecast: float, measurement: float, forecast_var: float = 0.18, obs_var: float = 0.08) -> float:

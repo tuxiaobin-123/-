@@ -306,9 +306,12 @@ class ToceBenchmarkImportRequest(BaseModel):
 
 class MultiAgentRunRequest(BaseModel):
     scenario: str = "strong_rain_release"
+    user_instruction: str | None = None
     rainfall_mm_h: float = 46.0
     gate_release_m3s: float = 900.0
     downstream_level_m: float = 50.5
+    min_plan_score: float = 55.0
+    max_replans: int = 0
 
 
 class SimulationStatus(BaseModel):

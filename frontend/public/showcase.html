@@ -281,7 +281,7 @@ section { padding: 88px 24px; }
 .agent-demo-panel h3 { color: #fff; font-size: 15px; margin-bottom: 10px; }
 .agent-demo-summary {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0,1fr));
+  grid-template-columns: repeat(6, minmax(0,1fr));
   gap: 10px;
   margin-bottom: 12px;
 }
@@ -598,18 +598,18 @@ footer {
       <div class="orchestrator-band">
         <div>
           <span>AGENT ORCHESTRATOR</span>
-          <strong>LangGraph StateGraph 编排：感知 → 仿真 → 风险 → 调度 → 报告</strong>
+          <strong>LangGraph StateGraph 编排：通讯 → 仿真 → 风险 → 调度 → 评估</strong>
         </div>
         <button class="agent-demo-link" onclick="runAgentDemo()">运行 5-Agent 编排</button>
       </div>
       <div class="agent-grid-v2">
         <div class="agent-card-v2">
-          <div class="agent-role">Sensor Agent</div>
-          <h3>感知智能体</h3>
+          <div class="agent-role">Communication Agent</div>
+          <h3>通讯智能体</h3>
           <ul>
-            <li>USGS/雨量/库水位接入</li>
-            <li>DEM 与监测点质量检查</li>
-            <li>形成共享观测状态</li>
+            <li>自然语言指令理解</li>
+            <li>消息路由与任务分发</li>
+            <li>归一化降雨/泄洪输入</li>
           </ul>
         </div>
         <div class="agent-card-v2">
@@ -640,21 +640,21 @@ footer {
           </ul>
         </div>
         <div class="agent-card-v2">
-          <div class="agent-role">Report Agent</div>
-          <h3>报告智能体</h3>
+          <div class="agent-role">Evaluation Agent</div>
+          <h3>评估智能体</h3>
           <ul>
-            <li>证据链自动汇总</li>
-            <li>PDF/API 指挥报告</li>
-            <li>人工确认节点输出</li>
+            <li>多指标融合评分</li>
+            <li>解释调度方案依据</li>
+            <li>不满意时触发重调度</li>
           </ul>
         </div>
       </div>
       <aside class="side-memory">
         <h3>人在回路 + 共享内存</h3>
-        <p>右侧共享状态承载 Redis / in-process fallback，保存观测、仿真、风险、调度和人工审批结果。</p>
-        <span class="memory-pill">Redis State: observations</span>
+        <p>右侧共享状态承载 Redis / in-process fallback，保存通讯、观测、仿真、风险、调度、评估和人工审批结果。</p>
+        <span class="memory-pill">Redis State: communication + observations</span>
         <span class="memory-pill">Redis State: risk + dispatch</span>
-        <span class="memory-pill">Human Review: warning approval</span>
+        <span class="memory-pill">Evaluation Loop: reject → replan</span>
         <a class="agent-demo-link" href="http://localhost:8000/api/flood/agents/demo" target="_blank">打开 Demo JSON</a>
       </aside>
       <div class="agent-demo-panel" id="agentDemoPanel">
@@ -663,15 +663,16 @@ footer {
           <span>状态：等待运行</span>
           <span>风险：-</span>
           <span>路径：-</span>
+          <span>评分：-</span>
           <span>人工节点：-</span>
           <span>运行：-</span>
         </div>
         <div class="agent-trace">
-          <div class="agent-trace-step"><strong>Sensor</strong>等待输入</div>
+          <div class="agent-trace-step"><strong>Communication</strong>等待输入</div>
           <div class="agent-trace-step"><strong>Simulation</strong>等待输入</div>
           <div class="agent-trace-step"><strong>Risk</strong>等待输入</div>
           <div class="agent-trace-step"><strong>Dispatch</strong>等待输入</div>
-          <div class="agent-trace-step"><strong>Report</strong>等待输入</div>
+          <div class="agent-trace-step"><strong>Evaluation</strong>等待输入</div>
         </div>
       </div>
     </div>
@@ -944,6 +945,7 @@ async function runAgentDemo() {
     <span>状态：运行中</span>
     <span>风险：计算中</span>
     <span>路径：计算中</span>
+    <span>评分：计算中</span>
     <span>人工节点：等待</span>
     <span>运行：请求后端</span>
   `;
@@ -955,6 +957,7 @@ async function runAgentDemo() {
       <span>状态：${data.status}</span>
       <span>风险：${data.risk_level} / ${data.risk_score}</span>
       <span>路径：${data.route}</span>
+      <span>评分：${data.plan_score}</span>
       <span>人工节点：${data.human_checkpoint}</span>
       <span>运行：${data.graph_runtime}</span>
     `;
@@ -971,6 +974,7 @@ async function runAgentDemo() {
       <span>状态：失败</span>
       <span>风险：-</span>
       <span>路径：-</span>
+      <span>评分：-</span>
       <span>错误：${error.message}</span>
       <span>运行：失败</span>
     `;
