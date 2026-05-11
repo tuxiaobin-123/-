@@ -4,13 +4,14 @@ import dayjs from 'dayjs'
 import {
   getActiveCase,
   getModelCapabilities,
+  getPinnDryRun,
   getRealDataStatus,
   getRuntimeBenchmark,
   getToceBenchmark,
   importToceBenchmark,
   startHistoricalReplay
 } from '../api/client'
-import { CaseProfile, ModelCapabilities, RealDataStatus, RuntimeBenchmark, ToceBenchmark } from '../types'
+import { CaseProfile, ModelCapabilities, PinnDryRun, RealDataStatus, RuntimeBenchmark, ToceBenchmark } from '../types'
 import './CaseDataPage.css'
 
 const DATA_STATUS_COPY = {
@@ -32,9 +33,11 @@ export const CaseDataPage: React.FC = () => {
   const [realDataStatus, setRealDataStatus] = useState<RealDataStatus | null>(null)
   const [runtimeBenchmark, setRuntimeBenchmark] = useState<RuntimeBenchmark | null>(null)
   const [toceBenchmark, setToceBenchmark] = useState<ToceBenchmark | null>(null)
+  const [pinnDryRun, setPinnDryRun] = useState<PinnDryRun | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [benchmarking, setBenchmarking] = useState(false)
+  const [pinnChecking, setPinnChecking] = useState(false)
   const [toceImporting, setToceImporting] = useState(false)
   const [toceCsvText, setToceCsvText] = useState(TOCE_CSV_TEMPLATE)
   const [startingReplay, setStartingReplay] = useState(false)
@@ -43,18 +46,20 @@ export const CaseDataPage: React.FC = () => {
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const [caseData, capabilityData, statusData, runtimeData, toceData] = await Promise.all([
+      const [caseData, capabilityData, statusData, runtimeData, toceData, pinnData] = await Promise.all([
         getActiveCase(),
         getModelCapabilities(),
         getRealDataStatus(),
         getRuntimeBenchmark('auto', 5),
-        getToceBenchmark()
+        getToceBenchmark(),
+        getPinnDryRun(32)
       ])
       setCaseProfile(caseData)
       setModelCapabilities(capabilityData)
       setRealDataStatus(statusData)
       setRuntimeBenchmark(runtimeData)
       setToceBenchmark(toceData)
+      setPinnDryRun(pinnData)
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : '案例数据加载失败')
@@ -75,6 +80,7 @@ export const CaseDataPage: React.FC = () => {
   const usgsSampleCount = realDataStatus?.usgs.series.reduce((total, series) => total + series.count, 0) || 0
   const isTorchActive = runtimeBenchmark?.actual_engine.startsWith('torch_tensor')
   const toceReady = toceBenchmark?.status === 'scored'
+  const pinnReady = pinnDryRun?.status === 'ok'
   const innovationCards = useMemo(() => {
     const points = modelCapabilities?.innovation_points
     return [
@@ -129,6 +135,23 @@ export const CaseDataPage: React.FC = () => {
       setReplayMessage(err instanceof Error ? err.message : '模型基准测试失败')
     } finally {
       setBenchmarking(false)
+    }
+  }
+
+  const handleRunPinnDryRun = async () => {
+    setPinnChecking(true)
+    try {
+      const result = await getPinnDryRun(64)
+      setPinnDryRun(result)
+      setReplayMessage(
+        result.status === 'ok'
+          ? `PINN dry-run ok: PDE loss ${result.losses?.pde ?? '-'}, device ${result.device}`
+          : `PINN dry-run unavailable: ${result.reason || result.required_dependency || 'missing dependency'}`
+      )
+    } catch (err) {
+      setReplayMessage(err instanceof Error ? err.message : 'PINN dry-run failed')
+    } finally {
+      setPinnChecking(false)
     }
   }
 
@@ -232,6 +255,28 @@ export const CaseDataPage: React.FC = () => {
             </button>
           </div>
           <em>{runtimeBenchmark?.torch_available ? 'torch 已安装，可选择 Tensor 求解器。' : '当前后端未安装 torch，Torch 请求会自动降级。'}</em>
+        </article>
+
+        <article className={`case-runtime-card ${pinnReady ? 'ready' : 'blocked'}`}>
+          <div>
+            <span>PINN DRY RUN</span>
+            <strong>{pinnReady ? `${pinnDryRun?.collocation_points || 0} points checked` : 'Torch dependency missing'}</strong>
+            <p>
+              {pinnReady && pinnDryRun?.losses
+                ? `PDE loss ${pinnDryRun.losses.pde} · total ${pinnDryRun.losses.total}`
+                : pinnDryRun?.reason || 'Fourier features + SWE residual check waits for torch runtime.'}
+            </p>
+          </div>
+          <div className="case-runtime-actions">
+            <button type="button" onClick={handleRunPinnDryRun} disabled={pinnChecking}>
+              {pinnChecking ? 'Checking...' : 'Run PINN check'}
+            </button>
+          </div>
+          <em>
+            {pinnReady && pinnDryRun?.adaptive_weights
+              ? `adaptive weights: data ${pinnDryRun.adaptive_weights.data}, pde ${pinnDryRun.adaptive_weights.pde}, bc ${pinnDryRun.adaptive_weights.bc}`
+              : `required: ${pinnDryRun?.required_dependency || 'torch'}`}
+          </em>
         </article>
 
         <article className={`case-runtime-card ${toceReady ? 'ready' : 'blocked'}`}>

@@ -35,6 +35,16 @@ class PINNSWETests(unittest.TestCase):
         self.assertEqual(set(weights.keys()), {"data", "pde", "bc"})
         self.assertTrue(all(weight > 0 for weight in weights.values()))
 
+    def test_pinn_dry_run_returns_residual_losses_and_weights(self):
+        result = pinn_swe.run_pinn_dry_run(num_points=12, hidden_dim=16, hidden_layers=2, num_frequencies=4)
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["collocation_points"], 12)
+        self.assertIn("continuity", result["residual_rmse"])
+        self.assertIn("pde", result["losses"])
+        self.assertIn("pde", result["adaptive_weights"])
+        self.assertGreaterEqual(result["losses"]["total"], 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()

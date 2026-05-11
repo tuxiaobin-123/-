@@ -110,3 +110,107 @@ class NTKAdaptiveLossBalancer:
             weighted = loss * weights.get(name, 1.0)
             total = weighted if total is None else total + weighted
         return total
+
+
+def _resolve_device(device: str):
+    if torch is None:
+        raise ImportError("PINN dry run requires torch.")
+    if device == "auto":
+        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if device == "cuda" and not torch.cuda.is_available():
+        return torch.device("cpu")
+    return torch.device(device)
+
+
+def _grad(values, coords):
+    return torch.autograd.grad(
+        values,
+        coords,
+        grad_outputs=torch.ones_like(values),
+        create_graph=True,
+        retain_graph=True,
+    )[0]
+
+
+def compute_swe_residuals(model: PINNSWENetwork, coords, gravity: float = 9.81) -> Dict[str, object]:
+    """Compute differentiable shallow-water residuals on x, y, t collocation points."""
+    prediction = model(coords)
+    h = prediction["h"]
+    u = prediction["u"]
+    v = prediction["v"]
+
+    h_grad = _grad(h, coords)
+    u_grad = _grad(u, coords)
+    v_grad = _grad(v, coords)
+    hu_grad = _grad(h * u, coords)
+    hv_grad = _grad(h * v, coords)
+
+    h_x, h_y, h_t = h_grad[:, 0:1], h_grad[:, 1:2], h_grad[:, 2:3]
+    u_x, u_y, u_t = u_grad[:, 0:1], u_grad[:, 1:2], u_grad[:, 2:3]
+    v_x, v_y, v_t = v_grad[:, 0:1], v_grad[:, 1:2], v_grad[:, 2:3]
+
+    continuity = h_t + hu_grad[:, 0:1] + hv_grad[:, 1:2]
+    momentum_x = u_t + u * u_x + v * u_y + float(gravity) * h_x
+    momentum_y = v_t + u * v_x + v * v_y + float(gravity) * h_y
+
+    return {
+        "continuity": continuity,
+        "momentum_x": momentum_x,
+        "momentum_y": momentum_y,
+    }
+
+
+def run_pinn_dry_run(
+    num_points: int = 64,
+    hidden_dim: int = 64,
+    hidden_layers: int = 3,
+    num_frequencies: int = 16,
+    device: str = "auto",
+) -> Dict:
+    """Run one no-optimizer PINN smoke pass and expose finite diagnostics."""
+    if torch is None or nn is None:
+        raise ImportError("PINN dry run requires torch.")
+
+    resolved_device = _resolve_device(device)
+    safe_points = max(4, min(int(num_points), 4096))
+    torch.manual_seed(42)
+
+    coords = torch.rand((safe_points, 3), dtype=torch.float32, device=resolved_device, requires_grad=True)
+    model = PINNSWENetwork(
+        input_dim=3,
+        hidden_dim=int(hidden_dim),
+        hidden_layers=int(hidden_layers),
+        num_frequencies=int(num_frequencies),
+    ).to(resolved_device)
+
+    prediction = model(coords)
+    residuals = compute_swe_residuals(model, coords)
+    pde_loss = sum(torch.mean(value * value) for value in residuals.values())
+    data_loss = torch.mean((prediction["h"] - 0.25) ** 2) + torch.mean(prediction["u"] ** 2) + torch.mean(prediction["v"] ** 2)
+    bc_loss = torch.mean((prediction["u"][:2] ** 2) + (prediction["v"][:2] ** 2))
+
+    balancer = NTKAdaptiveLossBalancer(["data", "pde", "bc"])
+    losses = {"data": data_loss, "pde": pde_loss, "bc": bc_loss}
+    total = balancer.weighted_sum(losses)
+
+    return {
+        "status": "ok",
+        "device": str(resolved_device),
+        "collocation_points": safe_points,
+        "network": {
+            "hidden_dim": int(hidden_dim),
+            "hidden_layers": int(hidden_layers),
+            "fourier_frequencies": int(num_frequencies),
+        },
+        "losses": {
+            "data": round(float(data_loss.detach().cpu()), 8),
+            "pde": round(float(pde_loss.detach().cpu()), 8),
+            "bc": round(float(bc_loss.detach().cpu()), 8),
+            "total": round(float(total.detach().cpu()), 8),
+        },
+        "adaptive_weights": {name: round(float(value), 6) for name, value in balancer.weights.items()},
+        "residual_rmse": {
+            name: round(float(torch.sqrt(torch.mean(value * value)).detach().cpu()), 8)
+            for name, value in residuals.items()
+        },
+    }

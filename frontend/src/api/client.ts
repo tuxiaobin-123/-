@@ -4,6 +4,7 @@ import {
   EvacuationRoute,
   FloodGridPoint,
   ModelCapabilities,
+  PinnDryRun,
   PredictionData,
   RealDataStatus,
   RuntimeBenchmark,
@@ -234,6 +235,13 @@ export const getRealDataStatus = async (): Promise<RealDataStatus> => {
 export const getRuntimeBenchmark = async (engine = 'auto', steps = 5): Promise<RuntimeBenchmark> => {
   const response = await apiClient.get<RuntimeBenchmark>('/flood/runtime/benchmark', {
     params: { engine, steps }
+  })
+  return response.data
+}
+
+export const getPinnDryRun = async (points = 64): Promise<PinnDryRun> => {
+  const response = await apiClient.get<PinnDryRun>('/flood/pinn/dry-run', {
+    params: { points }
   })
   return response.data
 }

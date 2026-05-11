@@ -29,6 +29,7 @@ from config import (
     SIMULATION_DT,
 )
 from models.hydraulic import SWEModel, TensorSWEModel, scalar_to_float, torch
+from models.pinn_swe import run_pinn_dry_run
 from benchmarks.toce_river import REQUIRED_COLUMNS, load_toce_comparison_text, score_toce_csv, write_toce_comparison_csv
 from services.real_observations import fetch_usgs_probe, get_oroville_2017_event
 
@@ -486,6 +487,20 @@ async def import_toce_benchmark(payload: ToceBenchmarkImportRequest) -> Dict:
         }
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/pinn/dry-run")
+async def run_pinn_diagnostics(points: int = 64) -> Dict:
+    safe_points = int(np.clip(points, 4, 2048))
+    try:
+        return run_pinn_dry_run(num_points=safe_points)
+    except ImportError as exc:
+        return {
+            "status": "unavailable",
+            "reason": str(exc),
+            "required_dependency": "torch",
+            "collocation_points": safe_points,
+        }
 
 
 @router.get("/real-data/status")

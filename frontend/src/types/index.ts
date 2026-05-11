@@ -1,4 +1,4 @@
-export interface FloodGridPoint {
+﻿export interface FloodGridPoint {
   lat: number
   lng: number
   depth: number
@@ -283,6 +283,27 @@ export interface ToceBenchmark {
     }
   }
   rows?: Array<Record<string, string | number>>
+}
+
+export interface PinnDryRun {
+  status: 'ok' | 'unavailable'
+  reason?: string
+  required_dependency?: string
+  device?: string
+  collocation_points: number
+  network?: {
+    hidden_dim: number
+    hidden_layers: number
+    fourier_frequencies: number
+  }
+  losses?: {
+    data: number
+    pde: number
+    bc: number
+    total: number
+  }
+  adaptive_weights?: Record<string, number>
+  residual_rmse?: Record<string, number>
 }
 
 export interface RealDataStatus {
