@@ -33,7 +33,7 @@ type Settlement = {
 }
 
 type MapContext = {
-  id: 'sanggan' | 'oroville'
+  id: 'sanggan'
   title: string
   subtitle: string
   source: string
@@ -54,9 +54,9 @@ type MapContext = {
 
 const SANGGAN_CONTEXT: MapContext = {
   id: 'sanggan',
-  title: '桑干河怀仁段 10年一遇洪水淹没范围图',
-  subtitle: '遥感底图 / DEM 模型网格 / 河道与村镇专题要素',
-  source: 'Imagery: Esri World Imagery · Context: OSM + local case dataset',
+  title: '桑干河怀仁段10年一遇洪水淹没范围图',
+  subtitle: '遥感底图 + DEM推演淹没面 + 1996历史种子校准',
+  source: '底图: Esri World Imagery · 专题数据: 桑干河怀仁段DEM缓存 / 1996历史洪水种子 / 本地监测对象',
   center: [39.805, 113.39],
   zoom: 11,
   bounds: [
@@ -153,110 +153,6 @@ const SANGGAN_CONTEXT: MapContext = {
   }
 }
 
-const OROVILLE_CONTEXT: MapContext = {
-  id: 'oroville',
-  title: 'Oroville Dam 10-year Flood Inundation Map',
-  subtitle: 'Remote imagery / Feather River corridor / model-derived inundation',
-  source: 'Imagery: Esri World Imagery · Context: OpenStreetMap via Overpass',
-  center: [39.515, -121.545],
-  zoom: 12,
-  bounds: [
-    [39.602, -121.682],
-    [39.602, -121.388],
-    [39.416, -121.388],
-    [39.416, -121.682]
-  ],
-  waterBodies: [
-    [
-      [39.592, -121.448],
-      [39.575, -121.405],
-      [39.535, -121.392],
-      [39.505, -121.428],
-      [39.514, -121.478],
-      [39.537, -121.494],
-      [39.565, -121.485]
-    ]
-  ],
-  rivers: [
-    {
-      name: 'Feather River',
-      points: [
-        [39.590, -121.430],
-        [39.565, -121.465],
-        [39.537, -121.486],
-        [39.522, -121.548],
-        [39.513, -121.556],
-        [39.496, -121.552],
-        [39.470, -121.615],
-        [39.445, -121.638]
-      ]
-    },
-    {
-      name: 'Campbell Creek',
-      points: [
-        [39.596, -121.520],
-        [39.570, -121.500],
-        [39.548, -121.486],
-        [39.522, -121.548]
-      ]
-    },
-    {
-      name: 'Little Cottonwood Creek',
-      points: [
-        [39.565, -121.430],
-        [39.540, -121.455],
-        [39.515, -121.478],
-        [39.498, -121.505]
-      ]
-    }
-  ],
-  roads: [
-    {
-      name: 'Oroville Dam Blvd E',
-      points: [
-        [39.537, -121.486],
-        [39.524, -121.505],
-        [39.515, -121.533],
-        [39.512, -121.557]
-      ]
-    },
-    {
-      name: 'Oroville-Quincy Hwy',
-      points: [
-        [39.570, -121.470],
-        [39.545, -121.505],
-        [39.525, -121.545],
-        [39.515, -121.570]
-      ]
-    },
-    {
-      name: 'Nelson Ave',
-      points: [
-        [39.495, -121.615],
-        [39.500, -121.575],
-        [39.503, -121.542]
-      ]
-    }
-  ],
-  settlements: [
-    { name: 'Oroville', type: 'town', lat: 39.5138, lng: -121.5564 },
-    { name: 'Thermalito', type: 'village', lat: 39.5113, lng: -121.5869 },
-    { name: 'South Oroville', type: 'hamlet', lat: 39.4966, lng: -121.5522 },
-    { name: 'Palermo', type: 'village', lat: 39.435, lng: -121.547 },
-    { name: 'Oroville Junction', type: 'hamlet', lat: 39.5096, lng: -121.6505 },
-    { name: 'Wyandotte', type: 'hamlet', lat: 39.4579, lng: -121.4677 }
-  ],
-  dam: {
-    name: 'Oroville Dam',
-    lat: 39.537193,
-    lng: -121.485565,
-    axis: [
-      [39.5374, -121.4975],
-      [39.5367, -121.4745]
-    ]
-  }
-}
-
 const RISK_COPY: Record<FloodGridPoint['risk_level'], { label: string; color: string }> = {
   low: { label: '低风险', color: '#2cb7ff' },
   medium: { label: '中风险', color: '#35d7ff' },
@@ -287,16 +183,6 @@ const inferGridStep = (values: number[], fallback: number) => {
     .map((value, index) => Math.abs(value - sorted[index]))
     .filter((delta) => delta > 0.00001)
   return deltas.length > 0 ? Math.min(...deltas) : fallback
-}
-
-const resolveContext = (floodGrid: FloodGridPoint[], sensors: SensorStation[], keyPoints: AffectedKeyPoint[]) => {
-  const lngValues = [
-    ...floodGrid.map((point) => point.lng),
-    ...sensors.map((station) => station.lng),
-    ...keyPoints.map((point) => point.lng).filter((value): value is number => typeof value === 'number')
-  ]
-
-  return lngValues.some((lng) => lng < 0) ? OROVILLE_CONTEXT : SANGGAN_CONTEXT
 }
 
 const buildFloodEnvelope = (points: FloodGridPoint[], minDepth: number, latStep: number, lngStep: number): LatLng[] | null => {
@@ -408,7 +294,7 @@ export const FloodMap: React.FC<FloodMapProps> = ({
     keyPoints: L.LayerGroup
   } | null>(null)
 
-  const context = useMemo(() => resolveContext(floodGrid, sensors, keyPoints), [floodGrid, sensors, keyPoints])
+  const context = SANGGAN_CONTEXT
   const floodedPoints = useMemo(() => floodGrid.filter((point) => point.flooded), [floodGrid])
   const maxDepth = useMemo(() => floodedPoints.reduce((max, point) => Math.max(max, point.depth), 0), [floodedPoints])
   const gridMetrics = useMemo(
@@ -571,7 +457,7 @@ export const FloodMap: React.FC<FloodMapProps> = ({
       layers.context.addLayer(
         L.polyline(river.points, {
           color: '#19c9ff',
-          weight: river.name.includes('主') || river.name.includes('Feather') ? 5 : 3,
+          weight: river.name.includes('主') ? 5 : 3,
           opacity: 0.96,
           className: 'context-river'
         }).bindTooltip(river.name, { sticky: true, className: 'topic-tooltip' })
@@ -873,7 +759,10 @@ export const FloodMap: React.FC<FloodMapProps> = ({
         <span><i className="legend-point" />监测点 / 关键对象</span>
       </div>
 
-      <div className="topic-map-source">{context.source}</div>
+      <div className="topic-map-source">
+        <strong>非认证专题推演图</strong>
+        <span>{context.source}</span>
+      </div>
     </div>
   )
 }

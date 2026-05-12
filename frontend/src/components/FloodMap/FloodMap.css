@@ -253,11 +253,23 @@
   right: 34px;
   top: 30px;
   z-index: 6;
-  max-width: 330px;
-  padding: 8px 10px;
-  border-radius: 999px;
+  display: grid;
+  gap: 3px;
+  max-width: 390px;
+  padding: 9px 12px;
+  border-radius: 14px;
   color: rgba(238, 246, 250, 0.82);
   font-size: 10px;
+}
+
+.topic-map-source strong {
+  color: #fff1b8;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.topic-map-source span {
+  line-height: 1.45;
 }
 
 .map-topic-tools {
