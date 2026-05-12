@@ -28,6 +28,22 @@ PARAMETER_LABELS = {
     "72020": "Elevation",
 }
 
+DATA_SOURCE_REGISTRY = {
+    "usgs_nwis_iv": {
+        "provider": "USGS NWIS Instantaneous Values",
+        "endpoint": USGS_IV_URL,
+        "role": "reservoir, release, downstream gage, and stage forcing observations",
+    },
+    "dem_grid_cache": {
+        "provider": "Local Oroville DEM grid cache",
+        "role": "terrain base for the shallow-water grid before GeoTIFF import",
+    },
+    "oroville_2017": {
+        "provider": "Oroville 2017 replay seed",
+        "role": "historical calibration scaffold for hydrograph timing and warning milestones",
+    },
+}
+
 OFFLINE_SEED_VALUES = {
     "11406800": {"station_name": "LK Oroville NR Oroville CA", "parameter_code": "62614", "latest_value": 266.0, "min": 264.8, "max": 267.2},
     "11406818": {"station_name": "Edward Hyatt PH Power Release", "parameter_code": "00060", "latest_value": 900.0, "min": 520.0, "max": 1480.0},
@@ -144,6 +160,7 @@ def build_offline_usgs_seed(station_ids: Iterable[str], error: Exception) -> Dic
         "status": "offline_seed",
         "fetched_at": now,
         "endpoint": USGS_IV_URL,
+        "source": DATA_SOURCE_REGISTRY["usgs_nwis_iv"],
         "series": series,
         "last_error": f"{type(error).__name__}: {error}",
     }
@@ -177,6 +194,7 @@ async def fetch_usgs_probe(
             "status": "live",
             "fetched_at": datetime.now(timezone.utc).isoformat(),
             "endpoint": str(response.url),
+            "source": DATA_SOURCE_REGISTRY["usgs_nwis_iv"],
             "series": summarize_usgs_payload(raw_payload),
         }
         _write_cache(cache_name, payload)
@@ -188,6 +206,163 @@ async def fetch_usgs_probe(
             cached["last_error"] = str(error)
             return cached
         return build_offline_usgs_seed(station_ids, error)
+
+
+def _clamp_score(value: float) -> int:
+    return int(max(0, min(100, round(value))))
+
+
+def _quality_grade(score: int) -> str:
+    if score >= 80:
+        return "trusted"
+    if score >= 55:
+        return "usable_with_review"
+    if score >= 30:
+        return "demo_only"
+    return "blocked"
+
+
+def _decision_status(grade: str) -> str:
+    if grade == "trusted":
+        return "auto_advisory_allowed"
+    if grade in {"usable_with_review", "demo_only"}:
+        return "human_review_required"
+    return "blocked"
+
+
+def build_data_quality_report(usgs_probe: Dict[str, Any], dem_status: Dict[str, Any], event: Dict[str, Any]) -> Dict[str, Any]:
+    """Score whether the current data chain is fit for operational-looking decisions."""
+    usgs_status = usgs_probe.get("status", "unavailable")
+    series = usgs_probe.get("series") or []
+    sample_count = sum(int(item.get("count") or 0) for item in series)
+    station_count = len({item.get("station_id") for item in series if item.get("station_id")})
+    calibration_targets = event.get("calibration_targets") or []
+    known_milestones = event.get("known_milestones") or []
+
+    status_scores = {"live": 45, "cached": 32, "offline_seed": 18, "unavailable": 0}
+    status_score = status_scores.get(usgs_status, 0)
+    if usgs_status == "live":
+        observation_score = min(25, sample_count / max(station_count * 24, 1) * 18)
+    elif usgs_status == "cached":
+        observation_score = min(20, sample_count / max(station_count * 24, 1) * 14)
+    elif usgs_status == "offline_seed":
+        observation_score = 8 if series else 0
+    else:
+        observation_score = 0
+
+    dem_score = 15 if dem_status.get("status") in {"cached", "loaded", "ready"} and dem_status.get("path") else 5
+    event_score = 6 if calibration_targets else 0
+    if known_milestones:
+        event_score += 4
+    provenance_score = 5 if usgs_probe.get("endpoint") and DATA_SOURCE_REGISTRY.get("usgs_nwis_iv") else 0
+
+    checks = [
+        {
+            "name": "USGS观测连通性",
+            "status": usgs_status,
+            "score": _clamp_score(status_score),
+            "evidence": f"{station_count} stations, {sample_count} samples",
+        },
+        {
+            "name": "时序完整度",
+            "status": "sufficient" if observation_score >= 18 else "limited",
+            "score": _clamp_score(observation_score),
+            "evidence": "live/cached data uses sample count; offline seeds are capped for safety",
+        },
+        {
+            "name": "DEM地形缓存",
+            "status": dem_status.get("status", "unknown"),
+            "score": _clamp_score(dem_score),
+            "evidence": dem_status.get("path") or "DEM path missing",
+        },
+        {
+            "name": "历史事件校准",
+            "status": "available" if event_score else "missing",
+            "score": _clamp_score(event_score),
+            "evidence": f"{len(calibration_targets)} targets, {len(known_milestones)} milestones",
+        },
+        {
+            "name": "来源可追溯",
+            "status": "traceable" if provenance_score else "missing",
+            "score": _clamp_score(provenance_score),
+            "evidence": usgs_probe.get("endpoint") or "no endpoint recorded",
+        },
+    ]
+    score = _clamp_score(sum(item["score"] for item in checks))
+    grade = _quality_grade(score)
+
+    return {
+        "score": score,
+        "grade": grade,
+        "decision_status": _decision_status(grade),
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "checks": checks,
+        "evidence_refs": [
+            {
+                "label": "USGS time series endpoint",
+                "value": usgs_probe.get("endpoint", USGS_IV_URL),
+                "provider": DATA_SOURCE_REGISTRY["usgs_nwis_iv"]["provider"],
+            },
+            {
+                "label": "DEM grid cache",
+                "value": dem_status.get("path") or "not configured",
+                "provider": DATA_SOURCE_REGISTRY["dem_grid_cache"]["provider"],
+            },
+            {
+                "label": "Historical replay event",
+                "value": event.get("event_id", "unknown"),
+                "provider": DATA_SOURCE_REGISTRY["oroville_2017"]["provider"],
+            },
+        ],
+    }
+
+
+def build_agent_evidence_chain(usgs_probe: Dict[str, Any], quality_report: Dict[str, Any], event: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Explain which evidence each agent consumes and produces."""
+    status = usgs_probe.get("status", "unavailable")
+    grade = quality_report.get("grade", "blocked")
+    score = int(quality_report.get("score") or 0)
+    confidence = round(max(0.2, min(0.95, score / 100)), 2)
+    audit_status = "review_required" if quality_report.get("decision_status") != "auto_advisory_allowed" else "auditable"
+    calibration_text = f"{len(event.get('calibration_targets') or [])} calibration targets"
+
+    return [
+        {
+            "agent": "communication",
+            "input_evidence": ["user instruction", f"data quality grade={grade}", f"USGS status={status}"],
+            "output_evidence": ["intent route", "target agent list", "human-review flag"],
+            "confidence": confidence,
+            "audit_status": audit_status,
+        },
+        {
+            "agent": "simulation",
+            "input_evidence": ["DEM grid cache", "rainfall boundary", "gate release boundary", "downstream control level"],
+            "output_evidence": ["water depth grid", "velocity field", "flood extent"],
+            "confidence": round(max(0.25, confidence - 0.04), 2),
+            "audit_status": audit_status,
+        },
+        {
+            "agent": "risk",
+            "input_evidence": [f"USGS observation mode={status}", "simulation grid", "affected objects"],
+            "output_evidence": ["risk probability band", "uncertainty label", "warning level"],
+            "confidence": round(max(0.2, confidence - 0.08), 2),
+            "audit_status": audit_status,
+        },
+        {
+            "agent": "dispatch",
+            "input_evidence": ["risk map", "shelter/resource points", "blocked/high-risk cells"],
+            "output_evidence": ["A* route candidate", "ant-colony route alternative", "resource dispatch suggestion"],
+            "confidence": round(max(0.2, confidence - 0.1), 2),
+            "audit_status": audit_status,
+        },
+        {
+            "agent": "evaluation",
+            "input_evidence": ["dispatch plan", f"quality score={score}", calibration_text],
+            "output_evidence": ["plan score", "replan decision", "explainable report skeleton"],
+            "confidence": round(max(0.2, confidence - 0.06), 2),
+            "audit_status": audit_status,
+        },
+    ]
 
 
 def get_oroville_2017_event() -> Dict[str, Any]:

@@ -47,6 +47,13 @@ const DATA_STATUS_COPY = {
   unavailable: { label: 'DOWN 不可达', tone: 'danger', detail: '实时源和缓存都不可用，需要先恢复外部网络链路。' }
 } as const
 
+const QUALITY_GRADE_COPY = {
+  trusted: { label: 'TRUSTED', tone: 'good' },
+  usable_with_review: { label: 'REVIEW', tone: 'warn' },
+  demo_only: { label: 'DEMO ONLY', tone: 'muted' },
+  blocked: { label: 'BLOCKED', tone: 'danger' }
+} as const
+
 const SCENARIO_PRESETS: Array<{
   key: string
   name: string
@@ -516,6 +523,10 @@ export const MainPage: React.FC = () => {
   const dataStatus = realDataStatus?.usgs.status || 'unavailable'
   const dataStatusCopy = DATA_STATUS_COPY[dataStatus]
   const historicalEvent = realDataStatus?.historical_event
+  const qualityReport = realDataStatus?.quality_report
+  const qualityGrade = qualityReport?.grade || 'blocked'
+  const qualityGradeCopy = QUALITY_GRADE_COPY[qualityGrade]
+  const agentEvidenceChain = realDataStatus?.agent_evidence_chain || []
 
   const planComparison = useMemo(() => {
     const currentRelease = simulationStatus?.gate_release ?? gateRelease
@@ -951,6 +962,20 @@ export const MainPage: React.FC = () => {
                       </div>
                       <p>{dataStatusCopy.detail}</p>
                     </div>
+                    <div className={`quality-score-card data-trust-${qualityGradeCopy.tone}`}>
+                      <div>
+                        <span>QUALITY SCORE</span>
+                        <strong>{qualityReport ? `${qualityReport.score}/100` : '--/100'}</strong>
+                        <em>{qualityGradeCopy.label} · {qualityReport?.decision_status || 'checking'}</em>
+                      </div>
+                      <div className="quality-check-list">
+                        {(qualityReport?.checks || []).slice(0, 3).map((check) => (
+                          <span key={check.name}>
+                            {check.name}: {check.score}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                     <div className="case-data-grid">
                       <div>
                         <span>气象时序</span>
@@ -975,6 +1000,19 @@ export const MainPage: React.FC = () => {
                       ))}
                     </div>
                     {realDataStatus?.usgs.last_error && <p className="real-data-warning">实时源暂不可达，已使用缓存或等待下次探测：{realDataStatus.usgs.last_error}</p>}
+                    <div className="agent-evidence-mini">
+                      <div className="historical-evidence-head">
+                        <strong>5-Agent Evidence</strong>
+                        <span>{agentEvidenceChain.length} agents</span>
+                      </div>
+                      {agentEvidenceChain.slice(0, 5).map((item) => (
+                        <div key={item.agent} className="agent-evidence-row">
+                          <span>{item.agent}</span>
+                          <strong>{Math.round(item.confidence * 100)}%</strong>
+                          <em>{item.output_evidence.slice(0, 2).join(' / ')}</em>
+                        </div>
+                      ))}
+                    </div>
                     {historicalEvent && (
                       <div className="historical-evidence">
                         <div className="historical-evidence-head">
@@ -1094,6 +1132,11 @@ export const MainPage: React.FC = () => {
             <strong className={`trust-${dataStatusCopy.tone}`}>{dataStatusCopy.label}</strong>
             <p>{dataStatusCopy.detail}</p>
           </div>
+          <div className="case-workspace-card case-workspace-status">
+            <span>QUALITY / AUDIT</span>
+            <strong className={`trust-${qualityGradeCopy.tone}`}>{qualityReport ? `${qualityReport.score}/100` : '--/100'}</strong>
+            <p>{qualityGradeCopy.label} · {qualityReport?.decision_status || 'checking'}</p>
+          </div>
           <div className="case-workspace-card">
             <span>DEM / 模型网格</span>
             <strong>{demCacheEnabled ? 'DEM 缓存已启用' : 'DEM 缓存未启用'}</strong>
@@ -1150,6 +1193,21 @@ export const MainPage: React.FC = () => {
             <div className="case-workspace-chips">
               {(historicalEvent?.calibration_targets || []).map((target) => (
                 <span key={target}>{target}</span>
+              ))}
+            </div>
+          </section>
+          <section>
+            <div className="case-section-head">
+              <strong>Agent Evidence Chain</strong>
+              <span>{agentEvidenceChain.length} agents</span>
+            </div>
+            <div className="case-workspace-agent-chain">
+              {agentEvidenceChain.map((item) => (
+                <div key={item.agent}>
+                  <span>{item.agent} · {Math.round(item.confidence * 100)}%</span>
+                  <strong>{item.audit_status}</strong>
+                  <em>{item.input_evidence.slice(0, 2).join(' / ')}</em>
+                </div>
               ))}
             </div>
           </section>

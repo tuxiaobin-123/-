@@ -1885,6 +1885,49 @@
   color: #ff6673;
 }
 
+.quality-score-card {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.6fr) 1fr;
+  gap: 10px;
+  margin: 10px 0;
+  padding: 10px;
+  border: 1px solid rgba(88, 209, 255, 0.16);
+  border-radius: 14px;
+  background: rgba(4, 18, 30, 0.68);
+}
+
+.quality-score-card span,
+.quality-score-card em,
+.agent-evidence-row em,
+.case-workspace-agent-chain em {
+  display: block;
+  color: rgba(142, 196, 224, 0.72);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.quality-score-card strong {
+  display: block;
+  margin: 3px 0;
+  color: #f2fcff;
+  font-family: 'Courier New', monospace;
+  font-size: 18px;
+}
+
+.quality-check-list {
+  display: grid;
+  gap: 5px;
+}
+
+.quality-check-list span {
+  overflow: hidden;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(88, 209, 255, 0.08);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .real-series-list {
   display: grid;
   gap: 8px;
@@ -1931,6 +1974,39 @@
 .real-data-warning {
   line-height: 1.5;
   white-space: normal;
+}
+
+.agent-evidence-mini {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid rgba(69, 245, 176, 0.16);
+  border-radius: 15px;
+  background: rgba(8, 29, 38, 0.72);
+}
+
+.agent-evidence-row {
+  display: grid;
+  grid-template-columns: 88px 46px 1fr;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 8px;
+  border-radius: 12px;
+  background: rgba(4, 15, 27, 0.74);
+}
+
+.agent-evidence-row span {
+  color: #bfefff;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.agent-evidence-row strong {
+  color: #42f5bc;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
 }
 
 .historical-evidence {
@@ -2437,6 +2513,40 @@
   background: rgba(255, 213, 111, 0.055);
   color: #ffe6a2;
   font-size: 11px;
+}
+
+.case-workspace-agent-chain {
+  display: grid;
+  gap: 8px;
+  max-height: 210px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.case-workspace-agent-chain > div {
+  padding: 9px 10px;
+  border: 1px solid rgba(69, 245, 176, 0.12);
+  border-radius: 13px;
+  background: rgba(7, 24, 33, 0.68);
+}
+
+.case-workspace-agent-chain span,
+.case-workspace-agent-chain strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.case-workspace-agent-chain span {
+  color: #7fffd7;
+  font-size: 11px;
+}
+
+.case-workspace-agent-chain strong {
+  margin: 3px 0;
+  color: #f2fcff;
+  font-size: 12px;
 }
 
 @media (max-width: 1440px) {

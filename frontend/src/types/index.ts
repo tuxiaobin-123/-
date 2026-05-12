@@ -356,6 +356,30 @@ export interface RealDataStatus {
     milestone_count: number
     calibration_target_count: number
   }
+  quality_report: {
+    score: number
+    grade: 'trusted' | 'usable_with_review' | 'demo_only' | 'blocked'
+    decision_status: 'auto_advisory_allowed' | 'human_review_required' | 'blocked'
+    checked_at: string
+    checks: Array<{
+      name: string
+      status: string
+      score: number
+      evidence: string
+    }>
+    evidence_refs: Array<{
+      label: string
+      value: string
+      provider?: string
+    }>
+  }
+  agent_evidence_chain: Array<{
+    agent: 'communication' | 'simulation' | 'risk' | 'dispatch' | 'evaluation'
+    input_evidence: string[]
+    output_evidence: string[]
+    confidence: number
+    audit_status: string
+  }>
   next_steps: string[]
 }
 
