@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Small real-data adapters for the Oroville prototype.
+Small real-data adapters for dam-case prototypes.
 
 These functions intentionally keep the first integration thin: they prove that
 the case can reach public hydrologic services, summarize the returned time
@@ -35,12 +35,16 @@ DATA_SOURCE_REGISTRY = {
         "role": "reservoir, release, downstream gage, and stage forcing observations",
     },
     "dem_grid_cache": {
-        "provider": "Local Oroville DEM grid cache",
+        "provider": "Local dam-case DEM grid cache",
         "role": "terrain base for the shallow-water grid before GeoTIFF import",
     },
     "oroville_2017": {
         "provider": "Oroville 2017 replay seed",
         "role": "historical calibration scaffold for hydrograph timing and warning milestones",
+    },
+    "sanggan_1996": {
+        "provider": "Sanggan River Huairen 1996 historical flood seed",
+        "role": "historical replay scaffold for Huairen flood warning calibration",
     },
 }
 
@@ -49,6 +53,13 @@ OFFLINE_SEED_VALUES = {
     "11406818": {"station_name": "Edward Hyatt PH Power Release", "parameter_code": "00060", "latest_value": 900.0, "min": 520.0, "max": 1480.0},
     "11407000": {"station_name": "FEATHER R A OROVILLE CA", "parameter_code": "00060", "latest_value": 710.0, "min": 430.0, "max": 1280.0},
     "11406870": {"station_name": "Thermalito Afterbay NR Oroville CA", "parameter_code": "00065", "latest_value": 40.5, "min": 39.8, "max": 41.4},
+}
+
+SANGGAN_SEED_VALUES = {
+    "sgr_upstream": {"station_name": "桑干河上游入境站（应县-怀仁）", "parameter_code": "00060", "latest_value": 420.0, "min": 120.0, "max": 842.0},
+    "sgr_huairen_main": {"station_name": "桑干河怀仁主站", "parameter_code": "00065", "latest_value": 1038.2, "min": 1035.0, "max": 1068.0},
+    "sgr_south_tributary": {"station_name": "恢河支流汇入口", "parameter_code": "00060", "latest_value": 160.0, "min": 45.0, "max": 320.0},
+    "sgr_downstream": {"station_name": "桑干河下游出境站（怀仁-山阴）", "parameter_code": "00065", "latest_value": 1018.0, "min": 1015.5, "max": 1032.0},
 }
 
 
@@ -208,6 +219,39 @@ async def fetch_usgs_probe(
         return build_offline_usgs_seed(station_ids, error)
 
 
+async def fetch_sanggan_probe(station_ids: Iterable[str]) -> Dict[str, Any]:
+    """Return transparent local historical seeds for the Sanggan Huairen case."""
+    now = datetime.now(timezone.utc).isoformat()
+    series = []
+    for station_id in station_ids:
+        seed = SANGGAN_SEED_VALUES.get(station_id)
+        if not seed:
+            continue
+        parameter_code = seed["parameter_code"]
+        series.append(
+            {
+                "provider": "Sanggan River historical seed",
+                "station_id": station_id,
+                "station_name": seed["station_name"],
+                "parameter_code": parameter_code,
+                "parameter_name": PARAMETER_LABELS.get(parameter_code, parameter_code),
+                "count": 24,
+                "latest_time": now,
+                "latest_value": seed["latest_value"],
+                "min": seed["min"],
+                "max": seed["max"],
+            }
+        )
+
+    return {
+        "status": "historical_seed",
+        "fetched_at": now,
+        "endpoint": "local://sanggan-1996-huairen-historical-seed",
+        "source": DATA_SOURCE_REGISTRY["sanggan_1996"],
+        "series": series,
+    }
+
+
 def _clamp_score(value: float) -> int:
     return int(max(0, min(100, round(value))))
 
@@ -239,12 +283,14 @@ def build_data_quality_report(usgs_probe: Dict[str, Any], dem_status: Dict[str, 
     calibration_targets = event.get("calibration_targets") or []
     known_milestones = event.get("known_milestones") or []
 
-    status_scores = {"live": 45, "cached": 32, "offline_seed": 18, "unavailable": 0}
+    status_scores = {"live": 45, "cached": 32, "historical_seed": 28, "offline_seed": 18, "unavailable": 0}
     status_score = status_scores.get(usgs_status, 0)
     if usgs_status == "live":
         observation_score = min(25, sample_count / max(station_count * 24, 1) * 18)
     elif usgs_status == "cached":
         observation_score = min(20, sample_count / max(station_count * 24, 1) * 14)
+    elif usgs_status == "historical_seed":
+        observation_score = min(16, sample_count / max(station_count * 24, 1) * 12)
     elif usgs_status == "offline_seed":
         observation_score = 8 if series else 0
     else:
@@ -267,7 +313,7 @@ def build_data_quality_report(usgs_probe: Dict[str, Any], dem_status: Dict[str, 
             "name": "时序完整度",
             "status": "sufficient" if observation_score >= 18 else "limited",
             "score": _clamp_score(observation_score),
-            "evidence": "live/cached data uses sample count; offline seeds are capped for safety",
+            "evidence": "live/cached data uses sample count; historical/offline seeds are capped for safety",
         },
         {
             "name": "DEM地形缓存",
@@ -299,7 +345,7 @@ def build_data_quality_report(usgs_probe: Dict[str, Any], dem_status: Dict[str, 
         "checks": checks,
         "evidence_refs": [
             {
-                "label": "USGS time series endpoint",
+                "label": "Observation time series endpoint",
                 "value": usgs_probe.get("endpoint", USGS_IV_URL),
                 "provider": DATA_SOURCE_REGISTRY["usgs_nwis_iv"]["provider"],
             },
@@ -311,7 +357,9 @@ def build_data_quality_report(usgs_probe: Dict[str, Any], dem_status: Dict[str, 
             {
                 "label": "Historical replay event",
                 "value": event.get("event_id", "unknown"),
-                "provider": DATA_SOURCE_REGISTRY["oroville_2017"]["provider"],
+                "provider": DATA_SOURCE_REGISTRY["sanggan_1996"]["provider"]
+                if str(event.get("event_id", "")).startswith("sanggan_")
+                else DATA_SOURCE_REGISTRY["oroville_2017"]["provider"],
             },
         ],
     }
@@ -392,5 +440,36 @@ def get_oroville_2017_event() -> Dict[str, Any]:
         "limitations": [
             "This replay is a calibration scaffold, not a certified reconstruction.",
             "The first pass calibrates hydrograph timing and reservoir/downstream response before 2D inundation depth.",
+        ],
+    }
+
+
+def get_sanggan_1996_event() -> Dict[str, Any]:
+    return {
+        "event_id": "sanggan_1996_huairen_flood",
+        "name": "1996 桑干河怀仁段历史洪水回放种子",
+        "period": {"start": "1996-08-04T06:00:00+08:00", "end": "1996-08-07T23:59:59+08:00"},
+        "calibration_targets": [
+            "怀仁主站水位过程线",
+            "上游入境洪峰流量",
+            "恢河支流汇入时段",
+            "桑干河大桥断面超警窗口",
+        ],
+        "known_milestones": [
+            {"time": "1996-08-04", "label": "上游持续强降雨，入境流量开始快速抬升"},
+            {"time": "1996-08-05", "label": "怀仁主站接近警戒水位，低洼区进入重点巡查"},
+            {"time": "1996-08-06", "label": "洪峰过境，桑干河大桥与市区低洼点承压"},
+        ],
+        "starter_simulation": {
+            "rainfall_mm_h": 78.0,
+            "upstream_m3s": 842.0,
+            "gate_release_m3s": 120.0,
+            "downstream_level_m": 1032.0,
+            "reservoir_level_m": 1058.0,
+            "duration_hours": 48.0,
+        },
+        "limitations": [
+            "This replay is a local historical scaffold, not a certified hydrologic reconstruction.",
+            "The first pass aligns water-level trend, peak timing, and downstream warning objects before full 2D calibration.",
         ],
     }

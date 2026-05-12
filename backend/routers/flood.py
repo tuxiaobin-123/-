@@ -35,8 +35,9 @@ from benchmarks.toce_river import REQUIRED_COLUMNS, load_toce_comparison_text, s
 from services.real_observations import (
     build_agent_evidence_chain,
     build_data_quality_report,
+    fetch_sanggan_probe,
     fetch_usgs_probe,
-    get_oroville_2017_event,
+    get_sanggan_1996_event,
 )
 
 router = APIRouter(prefix="/api/flood", tags=["flood"])
@@ -536,21 +537,24 @@ async def get_multi_agent_demo() -> Dict:
 
 @router.get("/real-data/status")
 async def get_real_data_status() -> Dict:
-    station_ids = [station_id.replace("usgs_", "") for station_id in SENSOR_STATIONS if station_id.startswith("usgs_")]
-    usgs_probe = await fetch_usgs_probe(station_ids=station_ids, period="P7D")
-    event = get_oroville_2017_event()
+    usgs_station_ids = [station_id.replace("usgs_", "") for station_id in SENSOR_STATIONS if station_id.startswith("usgs_")]
+    if usgs_station_ids:
+        observation_probe = await fetch_usgs_probe(station_ids=usgs_station_ids, period="P7D")
+    else:
+        observation_probe = await fetch_sanggan_probe(station_ids=SENSOR_STATIONS.keys())
+    event = get_sanggan_1996_event()
     dem_status = {
         "status": "cached",
         "path": DAM_CONFIG.get("dem_grid_path"),
         "mode": "local DEM grid cache; next step is GeoTIFF crop/import",
     }
-    quality_report = build_data_quality_report(usgs_probe, dem_status, event)
+    quality_report = build_data_quality_report(observation_probe, dem_status, event)
 
     return {
         "case_id": DAM_CONFIG.get("case_id", "custom"),
         "checked_at": datetime.now().isoformat(),
         "dem": dem_status,
-        "usgs": usgs_probe,
+        "usgs": observation_probe,
         "historical_event": {
             "event_id": event["event_id"],
             "name": event["name"],
@@ -563,18 +567,18 @@ async def get_real_data_status() -> Dict:
             "calibration_target_count": len(event["calibration_targets"]),
         },
         "quality_report": quality_report,
-        "agent_evidence_chain": build_agent_evidence_chain(usgs_probe, quality_report, event),
+        "agent_evidence_chain": build_agent_evidence_chain(observation_probe, quality_report, event),
         "next_steps": [
-            "Replace local DEM cache with cropped USGS 3DEP GeoTIFF.",
-            "Persist USGS/CDEC station time series as model forcing data.",
-            "Tune model parameters against the 2017 Oroville replay window.",
+            "Replace local DEM cache with verified Sanggan River GeoTIFF crop.",
+            "Persist Huairen hydrologic station time series as model forcing data.",
+            "Tune model parameters against the 1996 Sanggan River Huairen replay window.",
         ],
     }
 
 
-@router.get("/historical-events/oroville-2017")
-async def get_oroville_2017_historical_event() -> Dict:
-    return get_oroville_2017_event()
+@router.get("/historical-events/sanggan-1996")
+async def get_sanggan_1996_historical_event() -> Dict:
+    return get_sanggan_1996_event()
 
 
 def generate_synthetic_history(station_id: str, hours: int = 24) -> List[HistoryEntry]:
@@ -662,9 +666,9 @@ async def start_simulation(request_data: SimulationStartRequest, request: Reques
     return _apply_simulation_start(request_data, request)
 
 
-@router.post("/simulate/historical/oroville-2017")
-async def start_oroville_2017_replay(request: Request) -> Dict:
-    event = get_oroville_2017_event()
+@router.post("/simulate/historical/sanggan-1996")
+async def start_sanggan_1996_replay(request: Request) -> Dict:
+    event = get_sanggan_1996_event()
     seed = event["starter_simulation"]
     response = _apply_simulation_start(
         SimulationStartRequest(
@@ -676,7 +680,7 @@ async def start_oroville_2017_replay(request: Request) -> Dict:
             reservoir_level_m=seed["reservoir_level_m"],
         ),
         request,
-        history_label=event["name"],
+        history_label=event["event_id"],
     )
     response["event"] = event
     response["status"] = "historical_replay_started"

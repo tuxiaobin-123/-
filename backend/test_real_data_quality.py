@@ -35,7 +35,7 @@ class RealDataQualityTests(unittest.TestCase):
         self.assertEqual(report["grade"], "trusted")
         self.assertEqual(report["decision_status"], "auto_advisory_allowed")
         self.assertGreaterEqual(len(report["checks"]), 4)
-        self.assertTrue(any(ref["label"] == "USGS time series endpoint" for ref in report["evidence_refs"]))
+        self.assertTrue(any(ref["label"] == "Observation time series endpoint" for ref in report["evidence_refs"]))
 
     def test_quality_report_marks_offline_seed_as_human_review_required(self) -> None:
         usgs_probe = {

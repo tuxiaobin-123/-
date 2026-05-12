@@ -43,6 +43,7 @@ const formatCaseNumber = (value?: number, fractionDigits = 0) =>
 const DATA_STATUS_COPY = {
   live: { label: 'LIVE 实时', tone: 'good', detail: '已连通和风天气实时接口，可用于当前观测链路。' },
   cached: { label: 'CACHE 缓存', tone: 'warn', detail: '实时源暂不可达，正在使用最近一次成功抓取的数据。' },
+  historical_seed: { label: 'HISTORY 1996', tone: 'warn', detail: '当前使用桑干河怀仁段1996历史洪水种子数据，适合回放校准，不冒充实时。' },
   offline_seed: { label: 'SEED 离线种子', tone: 'muted', detail: '当前无法连接气象服务，先用季节统计数据跑通流程，不冒充实时。' },
   unavailable: { label: 'DOWN 不可达', tone: 'danger', detail: '实时源和缓存都不可用，需要先恢复外部网络链路。' }
 } as const
@@ -1016,7 +1017,7 @@ export const MainPage: React.FC = () => {
                     {historicalEvent && (
                       <div className="historical-evidence">
                         <div className="historical-evidence-head">
-                          <strong>2017 回放证据链</strong>
+                          <strong>1996 桑干河回放证据链</strong>
                           <span>{historicalEvent.milestone_count} 节点 · {historicalEvent.calibration_target_count} 目标</span>
                         </div>
                         <div className="event-timeline">
@@ -1172,7 +1173,7 @@ export const MainPage: React.FC = () => {
 
           <section>
             <div className="case-section-head">
-              <strong>2017 回放证据链</strong>
+              <strong>1996 桑干河回放证据链</strong>
               <span>{historicalEvent?.milestone_count || 0} 节点</span>
             </div>
             <div className="case-workspace-timeline">

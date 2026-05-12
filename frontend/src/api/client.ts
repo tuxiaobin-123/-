@@ -311,7 +311,7 @@ export const startHistoricalReplay = async (): Promise<{
   dam_name: string
   history_label: string
 }> => {
-  const response = await apiClient.post('/flood/simulate/historical/oroville-2017')
+  const response = await apiClient.post('/flood/simulate/historical/sanggan-1996')
   return response.data
 }
 

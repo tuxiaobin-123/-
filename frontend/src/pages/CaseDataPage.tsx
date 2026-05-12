@@ -17,6 +17,7 @@ import './CaseDataPage.css'
 const DATA_STATUS_COPY = {
   live: { label: 'LIVE 实时', tone: 'good', detail: '已连通 USGS 实时接口，可用于当前观测链路。' },
   cached: { label: 'CACHE 缓存', tone: 'warn', detail: '实时源暂不可达，正在使用最近一次成功抓取的数据。' },
+  historical_seed: { label: 'HISTORY 1996', tone: 'warn', detail: '当前使用桑干河怀仁段1996历史洪水种子数据，适合回放校准，不冒充实时。' },
   offline_seed: { label: 'SEED 离线种子', tone: 'muted', detail: '当前网络拦截 USGS，先用透明离线种子跑通流程，不冒充实时。' },
   unavailable: { label: 'DOWN 不可达', tone: 'danger', detail: '实时源和缓存都不可用，需要先恢复外部网络链路。' }
 } as const
@@ -115,7 +116,7 @@ export const CaseDataPage: React.FC = () => {
     setStartingReplay(true)
     try {
       const result = await startHistoricalReplay()
-      setReplayMessage(`2017 回放已启动：${result.total_steps} 步，入流 ${result.upstream_inflow_m3s.toFixed(0)} m³/s`)
+      setReplayMessage(`1996 桑干河回放已启动：${result.total_steps} 步，入流 ${result.upstream_inflow_m3s.toFixed(0)} m³/s`)
     } catch (err) {
       setReplayMessage(err instanceof Error ? err.message : '历史回放启动失败')
     } finally {
@@ -354,7 +355,7 @@ export const CaseDataPage: React.FC = () => {
         <article className="case-page-panel wide">
           <div className="case-panel-head">
             <div>
-              <span>2017 REPLAY</span>
+              <span>1996 SANGGAN REPLAY</span>
               <h2>历史回放证据链与校准目标</h2>
             </div>
             <span>{historicalEvent?.period.start.slice(0, 10)} 至 {historicalEvent?.period.end.slice(0, 10)}</span>

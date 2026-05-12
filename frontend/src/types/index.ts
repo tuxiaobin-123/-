@@ -315,7 +315,7 @@ export interface RealDataStatus {
     mode: string
   }
   usgs: {
-    status: 'live' | 'cached' | 'unavailable' | 'offline_seed'
+    status: 'live' | 'cached' | 'unavailable' | 'offline_seed' | 'historical_seed'
     fetched_at: string
     endpoint: string
     last_error?: string
