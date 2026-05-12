@@ -37,6 +37,7 @@ from services.real_observations import (
     build_data_quality_report,
     fetch_sanggan_probe,
     fetch_usgs_probe,
+    get_sanggan_1996_calibration_summary,
     get_sanggan_1996_event,
 )
 
@@ -579,6 +580,11 @@ async def get_real_data_status() -> Dict:
 @router.get("/historical-events/sanggan-1996")
 async def get_sanggan_1996_historical_event() -> Dict:
     return get_sanggan_1996_event()
+
+
+@router.get("/calibration/sanggan-1996")
+async def get_sanggan_1996_calibration() -> Dict:
+    return get_sanggan_1996_calibration_summary()
 
 
 def generate_synthetic_history(station_id: str, hours: int = 24) -> List[HistoryEntry]:

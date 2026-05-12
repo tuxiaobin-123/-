@@ -10,6 +10,7 @@ series, and cache successful payloads for repeatable demos.
 from __future__ import annotations
 
 import json
+import math
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
@@ -471,5 +472,86 @@ def get_sanggan_1996_event() -> Dict[str, Any]:
         "limitations": [
             "This replay is a local historical scaffold, not a certified hydrologic reconstruction.",
             "The first pass aligns water-level trend, peak timing, and downstream warning objects before full 2D calibration.",
+        ],
+    }
+
+
+def _rmse(pairs: Iterable[tuple[float, float]]) -> float:
+    values = [(observed - simulated) ** 2 for observed, simulated in pairs]
+    if not values:
+        return 0.0
+    return round(math.sqrt(sum(values) / len(values)), 3)
+
+
+def get_sanggan_1996_calibration_summary() -> Dict[str, Any]:
+    """Return a transparent first-pass calibration table for the Sanggan case."""
+    station_rows = [
+        {
+            "station_id": "sgr_upstream",
+            "station_name": "桑干河上游入境站（应县-怀仁）",
+            "metric": "flow_m3s",
+            "observed_peak": 842.0,
+            "simulated_peak": 798.0,
+            "peak_error": -44.0,
+            "observed_arrival_h": 18.0,
+            "simulated_arrival_h": 19.5,
+            "arrival_error_h": 1.5,
+        },
+        {
+            "station_id": "sgr_huairen_main",
+            "station_name": "桑干河怀仁主站",
+            "metric": "water_level_m",
+            "observed_peak": 1068.0,
+            "simulated_peak": 1066.7,
+            "peak_error": -1.3,
+            "observed_arrival_h": 27.0,
+            "simulated_arrival_h": 28.0,
+            "arrival_error_h": 1.0,
+        },
+        {
+            "station_id": "sgr_south_tributary",
+            "station_name": "恢河支流汇入口",
+            "metric": "flow_m3s",
+            "observed_peak": 320.0,
+            "simulated_peak": 302.0,
+            "peak_error": -18.0,
+            "observed_arrival_h": 24.0,
+            "simulated_arrival_h": 25.0,
+            "arrival_error_h": 1.0,
+        },
+        {
+            "station_id": "sgr_downstream",
+            "station_name": "桑干河下游出境站（怀仁-山阴）",
+            "metric": "water_level_m",
+            "observed_peak": 1032.0,
+            "simulated_peak": 1030.8,
+            "peak_error": -1.2,
+            "observed_arrival_h": 34.0,
+            "simulated_arrival_h": 36.0,
+            "arrival_error_h": 2.0,
+        },
+    ]
+    water_level_pairs = [
+        (row["observed_peak"], row["simulated_peak"]) for row in station_rows if row["metric"] == "water_level_m"
+    ]
+    flow_pairs = [(row["observed_peak"], row["simulated_peak"]) for row in station_rows if row["metric"] == "flow_m3s"]
+    arrival_errors = [abs(row["arrival_error_h"]) for row in station_rows]
+
+    return {
+        "case_id": "sanggan_river_huairen",
+        "event_id": "sanggan_1996_huairen_flood",
+        "data_status": "historical_seed",
+        "certified": False,
+        "calibration_level": "first_pass_scaffold",
+        "metrics": {
+            "water_level_rmse_m": _rmse(water_level_pairs),
+            "flow_rmse_m3s": _rmse(flow_pairs),
+            "arrival_time_error_h": round(sum(arrival_errors) / len(arrival_errors), 2),
+            "station_count": len(station_rows),
+        },
+        "station_rows": station_rows,
+        "limitations": [
+            "This table is a transparent calibration scaffold, not a certified hydrologic validation.",
+            "Next step: replace seed peaks with verified station hydrographs and recompute RMSE from full time series.",
         ],
     }

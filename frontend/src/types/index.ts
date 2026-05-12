@@ -383,6 +383,32 @@ export interface RealDataStatus {
   next_steps: string[]
 }
 
+export interface SangganCalibrationSummary {
+  case_id: string
+  event_id: string
+  data_status: 'historical_seed' | 'live' | 'cached' | 'offline_seed'
+  certified: boolean
+  calibration_level: string
+  metrics: {
+    water_level_rmse_m: number
+    flow_rmse_m3s: number
+    arrival_time_error_h: number
+    station_count: number
+  }
+  station_rows: Array<{
+    station_id: string
+    station_name: string
+    metric: 'flow_m3s' | 'water_level_m'
+    observed_peak: number
+    simulated_peak: number
+    peak_error: number
+    observed_arrival_h: number
+    simulated_arrival_h: number
+    arrival_error_h: number
+  }>
+  limitations: string[]
+}
+
 export interface ApiResponse<T> {
   code: number
   message: string

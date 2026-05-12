@@ -10,6 +10,7 @@ import {
   RuntimeBenchmark,
   RiskZoneCollection,
   RiskStats,
+  SangganCalibrationSummary,
   SensorStation,
   SimulationParams,
   SimulationStatus,
@@ -229,6 +230,11 @@ export const getModelCapabilities = async (): Promise<ModelCapabilities> => {
 
 export const getRealDataStatus = async (): Promise<RealDataStatus> => {
   const response = await apiClient.get<RealDataStatus>('/flood/real-data/status')
+  return response.data
+}
+
+export const getSangganCalibration = async (): Promise<SangganCalibrationSummary> => {
+  const response = await apiClient.get<SangganCalibrationSummary>('/flood/calibration/sanggan-1996')
   return response.data
 }
 

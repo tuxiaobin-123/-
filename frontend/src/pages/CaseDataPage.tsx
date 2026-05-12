@@ -7,11 +7,12 @@ import {
   getPinnDryRun,
   getRealDataStatus,
   getRuntimeBenchmark,
+  getSangganCalibration,
   getToceBenchmark,
   importToceBenchmark,
   startHistoricalReplay
 } from '../api/client'
-import { CaseProfile, ModelCapabilities, PinnDryRun, RealDataStatus, RuntimeBenchmark, ToceBenchmark } from '../types'
+import { CaseProfile, ModelCapabilities, PinnDryRun, RealDataStatus, RuntimeBenchmark, SangganCalibrationSummary, ToceBenchmark } from '../types'
 import './CaseDataPage.css'
 
 const DATA_STATUS_COPY = {
@@ -34,6 +35,7 @@ export const CaseDataPage: React.FC = () => {
   const [realDataStatus, setRealDataStatus] = useState<RealDataStatus | null>(null)
   const [runtimeBenchmark, setRuntimeBenchmark] = useState<RuntimeBenchmark | null>(null)
   const [toceBenchmark, setToceBenchmark] = useState<ToceBenchmark | null>(null)
+  const [sangganCalibration, setSangganCalibration] = useState<SangganCalibrationSummary | null>(null)
   const [pinnDryRun, setPinnDryRun] = useState<PinnDryRun | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -47,12 +49,13 @@ export const CaseDataPage: React.FC = () => {
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const [caseData, capabilityData, statusData, runtimeData, toceData, pinnData] = await Promise.all([
+      const [caseData, capabilityData, statusData, runtimeData, toceData, calibrationData, pinnData] = await Promise.all([
         getActiveCase(),
         getModelCapabilities(),
         getRealDataStatus(),
         getRuntimeBenchmark('auto', 5),
         getToceBenchmark(),
+        getSangganCalibration(),
         getPinnDryRun(32)
       ])
       setCaseProfile(caseData)
@@ -60,6 +63,7 @@ export const CaseDataPage: React.FC = () => {
       setRealDataStatus(statusData)
       setRuntimeBenchmark(runtimeData)
       setToceBenchmark(toceData)
+      setSangganCalibration(calibrationData)
       setPinnDryRun(pinnData)
       setError(null)
     } catch (err) {
@@ -309,6 +313,23 @@ export const CaseDataPage: React.FC = () => {
             </div>
           )}
         </article>
+
+        <article className="case-runtime-card ready">
+          <div>
+            <span>SANGGAN 1996 CALIBRATION</span>
+            <strong>
+              {sangganCalibration
+                ? `${sangganCalibration.metrics.station_count} 站 · 水位RMSE ${sangganCalibration.metrics.water_level_rmse_m} m`
+                : '等待校准表'}
+            </strong>
+            <p>
+              {sangganCalibration
+                ? `流量RMSE ${sangganCalibration.metrics.flow_rmse_m3s} m³/s · 平均到达误差 ${sangganCalibration.metrics.arrival_time_error_h} h`
+                : '从1996历史洪水种子生成第一版校准证据。'}
+            </p>
+          </div>
+          <em>{sangganCalibration?.certified ? 'certified validation' : 'first-pass scaffold，未认证，不冒充真实验收校准'}</em>
+        </article>
       </section>
 
       <section className="case-page-sections">
@@ -383,6 +404,50 @@ export const CaseDataPage: React.FC = () => {
                 时长 {formatNumber(historicalEvent?.starter_simulation.duration_hours)} h
               </p>
             </div>
+          </div>
+        </article>
+
+        <article className="case-page-panel wide">
+          <div className="case-panel-head">
+            <div>
+              <span>MODEL CALIBRATION</span>
+              <h2>1996 桑干河模型校准误差表</h2>
+            </div>
+            <span>{sangganCalibration?.calibration_level || 'pending'}</span>
+          </div>
+          <div className="case-calibration-kpis">
+            <div>
+              <span>水位 RMSE</span>
+              <strong>{sangganCalibration?.metrics.water_level_rmse_m ?? '-'} m</strong>
+            </div>
+            <div>
+              <span>流量 RMSE</span>
+              <strong>{sangganCalibration?.metrics.flow_rmse_m3s ?? '-'} m³/s</strong>
+            </div>
+            <div>
+              <span>平均到达误差</span>
+              <strong>{sangganCalibration?.metrics.arrival_time_error_h ?? '-'} h</strong>
+            </div>
+            <div>
+              <span>认证状态</span>
+              <strong>{sangganCalibration?.certified ? '已认证' : '未认证'}</strong>
+            </div>
+          </div>
+          <div className="case-calibration-table">
+            {(sangganCalibration?.station_rows || []).map((row) => (
+              <div key={row.station_id}>
+                <strong>{row.station_name}</strong>
+                <span>{row.metric}</span>
+                <span>实测峰值 {row.observed_peak}</span>
+                <span>模拟峰值 {row.simulated_peak}</span>
+                <em>峰值误差 {row.peak_error} · 到达误差 {row.arrival_error_h}h</em>
+              </div>
+            ))}
+          </div>
+          <div className="case-calibration-limitations">
+            {(sangganCalibration?.limitations || []).map((item) => (
+              <span key={item}>{item}</span>
+            ))}
           </div>
         </article>
 
